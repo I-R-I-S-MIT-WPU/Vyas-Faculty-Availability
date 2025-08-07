@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -6,15 +7,43 @@ import {
   User,
   LayoutDashboard,
   Settings,
+  Shield,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Header() {
   const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      checkAdminStatus();
+    }
+  }, [user]);
+
+  const checkAdminStatus = async () => {
+    try {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", user?.id)
+        .single();
+
+      if (error) throw error;
+      setIsAdmin(profile?.is_admin || false);
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+      setIsAdmin(false);
+    }
+  };
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -33,14 +62,15 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center space-x-2">
           <Calendar className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold">Vyaas Room Booking</h1>
         </Link>
 
-        <div className="flex items-center space-x-4">
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex items-center space-x-4">
           <ThemeToggle />
 
           {!loading && (
@@ -54,6 +84,15 @@ export default function Header() {
                     </Button>
                   </Link>
 
+                  {isAdmin && (
+                    <Link to="/admin">
+                      <Button variant="outline" size="sm" className="border-blue-200 text-blue-700 hover:bg-blue-50">
+                        <Shield className="h-4 w-4 mr-2" />
+                        Admin
+                      </Button>
+                    </Link>
+                  )}
+
                   <Link to="/settings">
                     <Button variant="ghost" size="sm">
                       <Settings className="h-4 w-4 mr-2" />
@@ -64,6 +103,9 @@ export default function Header() {
                   <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                     <User className="h-4 w-4" />
                     <span>{user.email}</span>
+                    {isAdmin && (
+                      <Shield className="h-3 w-3 text-blue-600" title="Admin User" />
+                    )}
                   </div>
 
                   <Button variant="outline" size="sm" onClick={handleSignOut}>
@@ -82,7 +124,78 @@ export default function Header() {
             </>
           )}
         </div>
+
+        {/* Mobile Menu Button */}
+        <div className="md:hidden flex items-center space-x-2">
+          <ThemeToggle />
+          {user && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Mobile Navigation */}
+      {mobileMenuOpen && user && (
+        <div className="md:hidden border-t bg-background/95 backdrop-blur">
+          <div className="container py-4 space-y-3">
+            <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+              <Button variant="default" size="sm" className="w-full justify-start">
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                My Bookings
+              </Button>
+            </Link>
+
+            {isAdmin && (
+              <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
+                <Button variant="outline" size="sm" className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin Dashboard
+                </Button>
+              </Link>
+            )}
+
+            <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </Link>
+
+            <div className="flex items-center justify-between px-3 py-2 text-sm text-muted-foreground border rounded-lg">
+              <div className="flex items-center space-x-2">
+                <User className="h-4 w-4" />
+                <span>{user.email}</span>
+                {isAdmin && (
+                  <Shield className="h-3 w-3 text-blue-600" title="Admin User" />
+                )}
+              </div>
+            </div>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                handleSignOut();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
