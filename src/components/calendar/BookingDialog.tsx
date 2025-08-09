@@ -56,18 +56,25 @@ export default function BookingDialog({
     endTime: Date
   ): Promise<boolean> => {
     try {
+      // Get all bookings for this room
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
-        .eq("room_id", room.id)
-        .or(
-          `start_time.lt.${endTime.toISOString()},end_time.gt.${startTime.toISOString()}`
-        );
+        .eq("room_id", room.id);
 
       if (error) throw error;
 
-      // If there are any overlapping bookings, return true (collision detected)
-      return data && data.length > 0;
+      // Check for overlapping bookings manually
+      const hasConflict = data?.some((booking) => {
+        const bookingStart = new Date(booking.start_time);
+        const bookingEnd = new Date(booking.end_time);
+
+        // Check if the new booking overlaps with existing booking
+        // Overlap occurs when: new_start < existing_end AND new_end > existing_start
+        return startTime < bookingEnd && endTime > bookingStart;
+      });
+
+      return hasConflict || false;
     } catch (error) {
       console.error("Error checking booking collision:", error);
       return false; // If we can't check, allow the booking to proceed
@@ -80,20 +87,27 @@ export default function BookingDialog({
     endTime: Date
   ): Promise<boolean> => {
     if (!user) return false;
-    
+
     try {
+      // Get all bookings for this user
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
-        .eq("teacher_id", user.id)
-        .or(
-          `start_time.lt.${endTime.toISOString()},end_time.gt.${startTime.toISOString()}`
-        );
+        .eq("teacher_id", user.id);
 
       if (error) throw error;
 
-      // If there are any overlapping bookings for the same user, return true (conflict detected)
-      return data && data.length > 0;
+      // Check for overlapping bookings manually
+      const hasConflict = data?.some((booking) => {
+        const bookingStart = new Date(booking.start_time);
+        const bookingEnd = new Date(booking.end_time);
+
+        // Check if the new booking overlaps with existing booking
+        // Overlap occurs when: new_start < existing_end AND new_end > existing_start
+        return startTime < bookingEnd && endTime > bookingStart;
+      });
+
+      return hasConflict || false;
     } catch (error) {
       console.error("Error checking user booking conflict:", error);
       return false;
@@ -102,31 +116,31 @@ export default function BookingDialog({
 
   const validateBooking = (startTime: Date, endTime: Date): string | null => {
     const now = new Date();
-    
+
     // Check if booking is in the past
     if (isBefore(startTime, now)) {
       return "Cannot create bookings in the past";
     }
-    
+
     // Check if it's a weekend
     if (isWeekend(startTime)) {
       return "Bookings are not allowed on weekends";
     }
-    
+
     // Check if booking is within allowed hours (7:30 AM to 10:30 PM)
     const startHour = startTime.getHours();
     const startMinute = startTime.getMinutes();
     const endHour = endTime.getHours();
     const endMinute = endTime.getMinutes();
-    
+
     if (startHour < 7 || (startHour === 7 && startMinute < 30)) {
       return "Bookings cannot start before 7:30 AM";
     }
-    
+
     if (endHour > 22 || (endHour === 22 && endMinute > 30)) {
       return "Bookings cannot end after 10:30 PM";
     }
-    
+
     return null;
   };
 
@@ -160,7 +174,8 @@ export default function BookingDialog({
       if (hasRoomCollision) {
         toast({
           title: "Room Already Booked",
-          description: "This time slot conflicts with an existing booking for this room. Please choose a different time or duration.",
+          description:
+            "This time slot conflicts with an existing booking for this room. Please choose a different time or duration.",
           variant: "destructive",
         });
         setLoading(false);
@@ -168,11 +183,15 @@ export default function BookingDialog({
       }
 
       // Check for user booking conflict
-      const hasUserConflict = await checkUserBookingConflict(startTime, endTime);
+      const hasUserConflict = await checkUserBookingConflict(
+        startTime,
+        endTime
+      );
       if (hasUserConflict) {
         toast({
           title: "Personal Schedule Conflict",
-          description: "You already have a booking that overlaps with this time period. Please choose a different time or duration.",
+          description:
+            "You already have a booking that overlaps with this time period. Please choose a different time or duration.",
           variant: "destructive",
         });
         setLoading(false);
@@ -196,28 +215,37 @@ export default function BookingDialog({
         if (error.message.includes("User already has a booking")) {
           toast({
             title: "Personal Schedule Conflict",
-            description: "You already have a booking that overlaps with this time period.",
+            description:
+              "You already have a booking that overlaps with this time period.",
             variant: "destructive",
           });
-        } else if (error.message.includes("Cannot create bookings in the past")) {
+        } else if (
+          error.message.includes("Cannot create bookings in the past")
+        ) {
           toast({
             title: "Invalid Booking Time",
             description: "Cannot create bookings in the past.",
             variant: "destructive",
           });
-        } else if (error.message.includes("Bookings are not allowed on weekends")) {
+        } else if (
+          error.message.includes("Bookings are not allowed on weekends")
+        ) {
           toast({
             title: "Weekend Booking Not Allowed",
             description: "Bookings are not allowed on weekends.",
             variant: "destructive",
           });
-        } else if (error.message.includes("Bookings cannot start before 7:30 AM")) {
+        } else if (
+          error.message.includes("Bookings cannot start before 7:30 AM")
+        ) {
           toast({
             title: "Invalid Start Time",
             description: "Bookings cannot start before 7:30 AM.",
             variant: "destructive",
           });
-        } else if (error.message.includes("Bookings cannot end after 10:30 PM")) {
+        } else if (
+          error.message.includes("Bookings cannot end after 10:30 PM")
+        ) {
           toast({
             title: "Invalid End Time",
             description: "Bookings cannot end after 10:30 PM.",
@@ -265,41 +293,47 @@ export default function BookingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-3">
+          <DialogTitle className="flex items-center space-x-2 text-lg">
             <MapPin className="h-5 w-5" />
             <span>Book Room {room.name}</span>
           </DialogTitle>
-          <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="space-y-1 text-sm text-muted-foreground">
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4" />
               <span>{format(date, "EEEE, MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4" />
-              <span>{format(startTime, "h:mm a")} - {format(endTime, "h:mm a")}</span>
+              <span>
+                {format(startTime, "h:mm a")} - {format(endTime, "h:mm a")}
+              </span>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="title" className="text-sm">
+              Title *
+            </Label>
             <Input
               id="title"
               placeholder="e.g., Data Structures Lecture"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="focus:ring-2 focus:ring-blue-500"
+              className="focus:ring-2 focus:ring-blue-500 h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="duration">Duration *</Label>
+          <div className="space-y-1">
+            <Label htmlFor="duration" className="text-sm">
+              Duration *
+            </Label>
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger className="focus:ring-2 focus:ring-blue-500">
+              <SelectTrigger className="focus:ring-2 focus:ring-blue-500 h-9">
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
@@ -311,57 +345,68 @@ export default function BookingDialog({
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="class-division">Class/Division</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="class-division" className="text-sm">
+                Class/Division
+              </Label>
               <Input
                 id="class-division"
                 placeholder="e.g., B.Tech A"
                 value={classDivision}
                 onChange={(e) => setClassDivision(e.target.value)}
+                className="h-9"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="panel">Panel</Label>
+            <div className="space-y-1">
+              <Label htmlFor="panel" className="text-sm">
+                Panel
+              </Label>
               <Input
                 id="panel"
                 placeholder="e.g., Panel 1"
                 value={panel}
                 onChange={(e) => setPanel(e.target.value)}
+                className="h-9"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="year-course">Year/Course</Label>
+          <div className="space-y-1">
+            <Label htmlFor="year-course" className="text-sm">
+              Year/Course
+            </Label>
             <Input
               id="year-course"
               placeholder="e.g., 2nd Year Computer Science"
               value={yearCourse}
               onChange={(e) => setYearCourse(e.target.value)}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+          <div className="space-y-1">
+            <Label htmlFor="description" className="text-sm">
+              Description
+            </Label>
             <Textarea
               id="description"
               placeholder="Additional details about the booking..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
+              rows={2}
+              className="resize-none"
             />
           </div>
 
           {/* Booking Information Alert */}
-          <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 py-2">
+            <AlertCircle className="h-3 w-3 text-blue-600 dark:text-blue-400 mt-0.5" />
             <AlertDescription className="text-blue-800 dark:text-blue-200">
-              <div className="space-y-1 text-sm">
-                <div>• Bookings are available from 7:30 AM to 10:30 PM</div>
-                <div>• Weekends are not available for booking</div>
-                <div>• You can only have one booking at a time</div>
-                <div>• Past time slots are automatically disabled</div>
+              <div className="space-y-0.5 text-xs">
+                <div>
+                  • 7:30 AM - 10:30 PM • Weekdays only • One booking per user
+                </div>
               </div>
             </AlertDescription>
           </Alert>
@@ -375,8 +420,8 @@ export default function BookingDialog({
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={loading || !title.trim()}
               className="bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
             >

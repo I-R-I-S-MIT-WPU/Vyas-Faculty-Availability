@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Booking, Room, Profile } from "@/types/database";
+import { Booking, Room, Profile, Floor } from "@/types/database";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -14,18 +14,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  Trash2, 
-  AlertCircle, 
-  Users, 
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Trash2,
+  AlertCircle,
+  Users,
   Shield,
   Search,
   Filter,
   UserCheck,
-  UserX
+  UserX,
+  Building,
+  Plus,
+  Edit,
+  Settings,
+  FileText,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
@@ -49,16 +54,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RoomManagementDialog } from "@/components/admin/RoomManagementDialog";
+import { FloorManagementDialog } from "@/components/admin/FloorManagementDialog";
+import { ReportGenerator } from "@/components/admin/ReportGenerator";
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [floors, setFloors] = useState<Floor[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("bookings");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Dialog states
+  const [roomDialog, setRoomDialog] = useState<{
+    open: boolean;
+    room?: Room | null;
+  }>({ open: false });
+  const [floorDialog, setFloorDialog] = useState<{
+    open: boolean;
+    floor?: Floor | null;
+  }>({ open: false });
 
   useEffect(() => {
     if (user) {
@@ -91,7 +111,12 @@ const AdminDashboard = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchAllBookings(), fetchAllUsers()]);
+      await Promise.all([
+        fetchAllBookings(),
+        fetchAllUsers(),
+        fetchAllRooms(),
+        fetchAllFloors(),
+      ]);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -130,6 +155,31 @@ const AdminDashboard = () => {
     setUsers(data || []);
   };
 
+  const fetchAllRooms = async () => {
+    const { data, error } = await supabase
+      .from("rooms")
+      .select(
+        `
+        *,
+        floor:floors(*)
+      `
+      )
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+    setRooms(data || []);
+  };
+
+  const fetchAllFloors = async () => {
+    const { data, error } = await supabase
+      .from("floors")
+      .select("*")
+      .order("number", { ascending: true });
+
+    if (error) throw error;
+    setFloors(data || []);
+  };
+
   const deleteBooking = async (bookingId: string) => {
     try {
       const { error } = await supabase
@@ -166,7 +216,9 @@ const AdminDashboard = () => {
 
       toast({
         title: "Success",
-        description: `User ${!currentStatus ? 'promoted to' : 'removed from'} admin successfully`,
+        description: `User ${
+          !currentStatus ? "promoted to" : "removed from"
+        } admin successfully`,
       });
 
       fetchAllUsers();
@@ -175,6 +227,91 @@ const AdminDashboard = () => {
       toast({
         title: "Error",
         description: "Failed to update admin status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteRoom = async (roomId: string) => {
+    try {
+      // Check if room has any bookings
+      const { data: bookings, error: bookingsError } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("room_id", roomId)
+        .limit(1);
+
+      if (bookingsError) throw bookingsError;
+
+      if (bookings && bookings.length > 0) {
+        toast({
+          title: "Cannot Delete Room",
+          description:
+            "This room has existing bookings. Please remove all bookings before deleting the room.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { error } = await supabase.from("rooms").delete().eq("id", roomId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Room deleted successfully",
+      });
+
+      fetchAllRooms();
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete room",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteFloor = async (floorId: string) => {
+    try {
+      // Check if floor has any rooms
+      const { data: rooms, error: roomsError } = await supabase
+        .from("rooms")
+        .select("id")
+        .eq("floor_id", floorId)
+        .limit(1);
+
+      if (roomsError) throw roomsError;
+
+      if (rooms && rooms.length > 0) {
+        toast({
+          title: "Cannot Delete Floor",
+          description:
+            "This floor has existing rooms. Please remove all rooms before deleting the floor.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from("floors")
+        .delete()
+        .eq("id", floorId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Floor deleted successfully",
+      });
+
+      fetchAllFloors();
+    } catch (error) {
+      console.error("Error deleting floor:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete floor",
         variant: "destructive",
       });
     }
@@ -203,22 +340,42 @@ const AdminDashboard = () => {
   };
 
   const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch = 
+    const matchesSearch =
       booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.profiles?.full_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       booking.room?.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterStatus === "all" || 
-      (filterStatus === "upcoming" && getBookingStatus(booking).label === "Upcoming") ||
-      (filterStatus === "completed" && getBookingStatus(booking).label === "Completed") ||
-      (filterStatus === "in-progress" && getBookingStatus(booking).label === "In Progress");
+
+    const matchesFilter =
+      filterStatus === "all" ||
+      (filterStatus === "upcoming" &&
+        getBookingStatus(booking).label === "Upcoming") ||
+      (filterStatus === "completed" &&
+        getBookingStatus(booking).label === "Completed") ||
+      (filterStatus === "in-progress" &&
+        getBookingStatus(booking).label === "In Progress");
 
     return matchesSearch && matchesFilter;
   });
 
-  const filteredUsers = users.filter((user) =>
-    user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = users.filter(
+    (user) =>
+      user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredRooms = rooms.filter(
+    (room) =>
+      room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      room.room_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      room.floor?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredFloors = floors.filter(
+    (floor) =>
+      floor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      floor.number.toString().includes(searchTerm)
   );
 
   if (!user) {
@@ -258,10 +415,12 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto py-6 space-y-6">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-          <p className="text-muted-foreground mt-2">
+      <main className="container mx-auto py-4 sm:py-6 px-4 sm:px-6 space-y-4 sm:space-y-6">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Admin Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm sm:text-base">
             Manage users, bookings, and system settings
           </p>
         </div>
@@ -269,16 +428,55 @@ const AdminDashboard = () => {
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
-          className="space-y-6"
+          className="space-y-4 sm:space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="bookings">
-              Bookings ({bookings.length})
-            </TabsTrigger>
-            <TabsTrigger value="users">
-              Users ({users.length})
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-5 gap-1 h-auto p-1">
+              <TabsTrigger
+                value="bookings"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <Calendar className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  Bookings ({bookings.length})
+                </span>
+                <span className="sm:hidden">Bookings</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="users"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Users ({users.length})</span>
+                <span className="sm:hidden">Users</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="rooms"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <Building className="h-4 w-4" />
+                <span className="hidden sm:inline">Rooms ({rooms.length})</span>
+                <span className="sm:hidden">Rooms</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="floors"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  Floors ({floors.length})
+                </span>
+                <span className="sm:hidden">Floors</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="reports"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <FileText className="h-4 w-4" />
+                Reports
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="bookings" className="space-y-4">
             {/* Search and Filter */}
@@ -329,10 +527,9 @@ const AdminDashboard = () => {
                     No bookings found
                   </h3>
                   <p className="text-muted-foreground">
-                    {searchTerm || filterStatus !== "all" 
+                    {searchTerm || filterStatus !== "all"
                       ? "Try adjusting your search or filter criteria."
-                      : "There are no bookings in the system."
-                    }
+                      : "There are no bookings in the system."}
                   </p>
                 </CardContent>
               </Card>
@@ -374,7 +571,8 @@ const AdminDashboard = () => {
                         </div>
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Users className="h-4 w-4 mr-2" />
-                          {booking.profiles?.full_name} ({booking.profiles?.email})
+                          {booking.profiles?.full_name} (
+                          {booking.profiles?.email})
                         </div>
                         {booking.description && (
                           <p className="text-sm text-muted-foreground mt-2">
@@ -402,13 +600,12 @@ const AdminDashboard = () => {
                                 Delete Booking
                               </AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete this booking? This action cannot be undone.
+                                Are you sure you want to delete this booking?
+                                This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>
-                                Cancel
-                              </AlertDialogCancel>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => deleteBooking(booking.id)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -457,14 +654,11 @@ const AdminDashboard = () => {
               <Card>
                 <CardContent className="text-center py-8">
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">
-                    No users found
-                  </h3>
+                  <h3 className="text-lg font-semibold mb-2">No users found</h3>
                   <p className="text-muted-foreground">
-                    {searchTerm 
+                    {searchTerm
                       ? "Try adjusting your search criteria."
-                      : "There are no users in the system."
-                    }
+                      : "There are no users in the system."}
                   </p>
                 </CardContent>
               </Card>
@@ -500,10 +694,15 @@ const AdminDashboard = () => {
                     <CardContent>
                       <div className="space-y-2">
                         <div className="text-sm text-muted-foreground">
-                          Department: {userProfile.department || "Not specified"}
+                          Department:{" "}
+                          {userProfile.department || "Not specified"}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          Joined: {format(parseISO(userProfile.created_at), "MMM dd, yyyy")}
+                          Joined:{" "}
+                          {format(
+                            parseISO(userProfile.created_at),
+                            "MMM dd, yyyy"
+                          )}
                         </div>
                       </div>
 
@@ -511,7 +710,12 @@ const AdminDashboard = () => {
                         <Button
                           variant={userProfile.is_admin ? "outline" : "default"}
                           size="sm"
-                          onClick={() => toggleAdminStatus(userProfile.id, userProfile.is_admin)}
+                          onClick={() =>
+                            toggleAdminStatus(
+                              userProfile.id,
+                              userProfile.is_admin
+                            )
+                          }
                           disabled={userProfile.id === user?.id}
                         >
                           {userProfile.is_admin ? (
@@ -533,7 +737,314 @@ const AdminDashboard = () => {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="rooms" className="space-y-4">
+            {/* Room Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search rooms..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button onClick={() => setRoomDialog({ open: true })}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Room
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredRooms.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No rooms found</h3>
+                  <p className="text-muted-foreground">
+                    {searchTerm
+                      ? "Try adjusting your search criteria."
+                      : "There are no rooms in the system."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredRooms.map((room) => (
+                  <Card key={room.id} className="animate-fadeIn">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-lg">{room.name}</CardTitle>
+                          <CardDescription className="flex items-center mt-1">
+                            <MapPin className="h-4 w-4 mr-1" />
+                            {room.floor?.name}
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant={room.is_active ? "default" : "secondary"}
+                        >
+                          {room.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Type:</span>
+                          <Badge variant="outline">
+                            {room.room_type === "classroom"
+                              ? "Lecture Room"
+                              : room.room_type === "lab"
+                              ? "Lab"
+                              : room.room_type === "conference"
+                              ? "Conference Room"
+                              : room.room_type === "auditorium"
+                              ? "Hall"
+                              : room.room_type}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Capacity:
+                          </span>
+                          <span>{room.capacity || "Not specified"}</span>
+                        </div>
+                        {room.equipment && room.equipment.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-sm text-muted-foreground">
+                              Equipment:
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {room.equipment.map((eq, index) => (
+                                <Badge
+                                  key={index}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {eq}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRoomDialog({ open: true, room })}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Room</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this room? This
+                                action cannot be undone. Any existing bookings
+                                for this room will prevent deletion.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteRoom(room.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete Room
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="floors" className="space-y-4">
+            {/* Floor Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search floors..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button onClick={() => setFloorDialog({ open: true })}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Floor
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredFloors.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    No floors found
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {searchTerm
+                      ? "Try adjusting your search criteria."
+                      : "There are no floors in the system."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredFloors.map((floor) => {
+                  const roomCount = rooms.filter(
+                    (room) => room.floor_id === floor.id
+                  ).length;
+                  return (
+                    <Card key={floor.id} className="animate-fadeIn">
+                      <CardHeader>
+                        <CardTitle className="text-lg">{floor.name}</CardTitle>
+                        <CardDescription>
+                          Floor Number: {floor.number}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Rooms:
+                            </span>
+                            <Badge variant="outline">{roomCount} rooms</Badge>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Created:
+                            </span>
+                            <span>
+                              {format(
+                                parseISO(floor.created_at),
+                                "MMM dd, yyyy"
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setFloorDialog({ open: true, floor })
+                            }
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete Floor
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this floor?
+                                  This action cannot be undone. Any existing
+                                  rooms on this floor will prevent deletion.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteFloor(floor.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete Floor
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="reports" className="space-y-4">
+            <ReportGenerator />
+          </TabsContent>
         </Tabs>
+
+        {/* Dialog Components */}
+        <RoomManagementDialog
+          open={roomDialog.open}
+          onOpenChange={(open) => setRoomDialog({ open })}
+          room={roomDialog.room}
+          onRoomSaved={() => {
+            fetchAllRooms();
+            setRoomDialog({ open: false });
+          }}
+        />
+
+        <FloorManagementDialog
+          open={floorDialog.open}
+          onOpenChange={(open) => setFloorDialog({ open })}
+          floor={floorDialog.floor}
+          onFloorSaved={() => {
+            fetchAllFloors();
+            setFloorDialog({ open: false });
+          }}
+        />
       </main>
     </div>
   );

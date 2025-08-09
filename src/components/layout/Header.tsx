@@ -86,7 +86,11 @@ export default function Header() {
 
                   {isAdmin && (
                     <Link to="/admin">
-                      <Button variant="outline" size="sm" className="border-blue-200 text-blue-700 hover:bg-blue-50">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/20"
+                      >
                         <Shield className="h-4 w-4 mr-2" />
                         Admin
                       </Button>
@@ -100,11 +104,16 @@ export default function Header() {
                     </Button>
                   </Link>
 
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <User className="h-4 w-4" />
-                    <span>{user.email}</span>
+                  <div className="flex items-center space-x-2 px-3 py-2 rounded-md bg-muted/30">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{user.email}</span>
                     {isAdmin && (
-                      <Shield className="h-3 w-3 text-blue-600" title="Admin User" />
+                      <div className="flex items-center">
+                        <Shield
+                          className="h-4 w-4 text-blue-600"
+                          title="Admin User"
+                        />
+                      </div>
                     )}
                   </div>
 
@@ -149,7 +158,11 @@ export default function Header() {
         <div className="md:hidden border-t bg-background/95 backdrop-blur">
           <div className="container py-4 space-y-3">
             <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="default" size="sm" className="w-full justify-start">
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full justify-start"
+              >
                 <LayoutDashboard className="h-4 w-4 mr-2" />
                 My Bookings
               </Button>
@@ -157,7 +170,11 @@ export default function Header() {
 
             {isAdmin && (
               <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="outline" size="sm" className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/20"
+                >
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Dashboard
                 </Button>
@@ -165,25 +182,36 @@ export default function Header() {
             )}
 
             <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="ghost" size="sm" className="w-full justify-start">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start"
+              >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Button>
             </Link>
 
-            <div className="flex items-center justify-between px-3 py-2 text-sm text-muted-foreground border rounded-lg">
+            <div className="flex items-center justify-between px-3 py-3 bg-muted/30 border rounded-lg">
               <div className="flex items-center space-x-2">
-                <User className="h-4 w-4" />
-                <span>{user.email}</span>
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">
+                  {user.email}
+                </span>
                 {isAdmin && (
-                  <Shield className="h-3 w-3 text-blue-600" title="Admin User" />
+                  <div className="flex items-center ml-2">
+                    <Shield
+                      className="h-4 w-4 text-blue-600"
+                      title="Admin User"
+                    />
+                  </div>
                 )}
               </div>
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 handleSignOut();
                 setMobileMenuOpen(false);
