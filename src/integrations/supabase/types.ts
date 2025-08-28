@@ -180,7 +180,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      room_type: "classroom" | "lab" | "auditorium" | "conference" | "seminar"
+              room_type: "classroom" | "lab" | "auditorium" | "conference" | "seminar" | "discussion"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -308,7 +308,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      room_type: ["classroom", "lab", "auditorium", "conference", "seminar"],
+              room_type: ["classroom", "lab", "auditorium", "conference", "seminar", "discussion"],
     },
   },
 } as const

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Floor } from "@/types/database";
+import { Floor, Building } from "@/types/database";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 
 interface FloorManagementDialogProps {
@@ -28,10 +35,38 @@ export const FloorManagementDialog = ({
   onFloorSaved,
 }: FloorManagementDialogProps) => {
   const [loading, setLoading] = useState(false);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [formData, setFormData] = useState({
     number: "",
     name: "",
+    building_id: "",
   });
+
+  // Fetch buildings when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchBuildings();
+    }
+  }, [open]);
+
+  const fetchBuildings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("buildings")
+        .select("*")
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      setBuildings(data || []);
+    } catch (error) {
+      console.error("Error fetching buildings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load buildings",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -39,18 +74,24 @@ export const FloorManagementDialog = ({
         setFormData({
           number: floor.number.toString(),
           name: floor.name,
+          building_id: floor.building_id || "",
         });
       } else {
         setFormData({
           number: "",
           name: "",
+          building_id: buildings.length > 0 ? buildings[0].id : "",
         });
       }
     }
-  }, [open, floor]);
+  }, [open, floor, buildings]);
 
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.number.trim()) {
+    if (
+      !formData.name.trim() ||
+      !formData.number.trim() ||
+      !formData.building_id
+    ) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -74,6 +115,7 @@ export const FloorManagementDialog = ({
       const floorData = {
         number: floorNumber,
         name: formData.name.trim(),
+        building_id: formData.building_id,
       };
 
       if (floor) {
@@ -110,7 +152,8 @@ export const FloorManagementDialog = ({
       if (error?.code === "23505") {
         toast({
           title: "Error",
-          description: "A floor with this number already exists",
+          description:
+            "A floor with this number already exists in this building",
           variant: "destructive",
         });
       } else {
@@ -136,6 +179,29 @@ export const FloorManagementDialog = ({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="building" className="text-right">
+              Building *
+            </Label>
+            <Select
+              value={formData.building_id}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, building_id: value }))
+              }
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select a building" />
+              </SelectTrigger>
+              <SelectContent>
+                {buildings.map((building) => (
+                  <SelectItem key={building.id} value={building.id}>
+                    {building.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="number" className="text-right">
               Floor Number *

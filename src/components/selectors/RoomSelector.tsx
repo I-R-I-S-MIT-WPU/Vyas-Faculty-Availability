@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Room, Floor } from "@/types/database";
+import { Room, Floor, Building } from "@/types/database";
 import { toast } from "@/hooks/use-toast";
 import {
   Search,
@@ -33,6 +33,7 @@ interface RoomSelectorProps {
 
 interface FloorWithRooms extends Floor {
   rooms: Room[];
+  building: Building;
 }
 
 // Room type mapping for better display
@@ -66,6 +67,31 @@ const roomTypeLabels = {
     color:
       "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300",
   },
+  discussion: {
+    label: "Discussion Room",
+    icon: Users,
+    color: "bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-300",
+  },
+};
+
+// Helper functions
+const getRoomTypeLabel = (roomType: string) => {
+  return (
+    roomTypeLabels[roomType as keyof typeof roomTypeLabels]?.label || roomType
+  );
+};
+
+const getRoomTypeColor = (roomType: string) => {
+  return (
+    roomTypeLabels[roomType as keyof typeof roomTypeLabels]?.color ||
+    "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300"
+  );
+};
+
+const getRoomTypeIcon = (roomType: string) => {
+  return (
+    roomTypeLabels[roomType as keyof typeof roomTypeLabels]?.icon || Building2
+  );
 };
 
 export default function RoomSelector({
@@ -73,6 +99,8 @@ export default function RoomSelector({
   selectedRoom,
 }: RoomSelectorProps) {
   const [floors, setFloors] = useState<FloorWithRooms[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [selectedBuilding, setSelectedBuilding] = useState<string>("");
   const [selectedFloor, setSelectedFloor] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,8 +109,39 @@ export default function RoomSelector({
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    fetchFloors();
+    fetchBuildings();
   }, []);
+
+  useEffect(() => {
+    if (selectedBuilding) {
+      fetchFloors();
+    }
+  }, [selectedBuilding]);
+
+  const fetchBuildings = async () => {
+    try {
+      const { data: buildingsData, error } = await supabase
+        .from("buildings")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+
+      if (error) throw error;
+      setBuildings(buildingsData || []);
+
+      // Set default building if available
+      if (buildingsData && buildingsData.length > 0) {
+        setSelectedBuilding(buildingsData[0].id);
+      }
+    } catch (error) {
+      console.error("Error fetching buildings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load buildings",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchFloors = async () => {
     try {
@@ -91,21 +150,23 @@ export default function RoomSelector({
         .select(
           `
           *,
-          rooms (*)
+          rooms (*),
+          building:buildings(*)
         `
         )
+        .eq("building_id", selectedBuilding)
         .order("number");
 
       if (error) throw error;
       setFloors(floorsData || []);
+      setLoading(false);
     } catch (error) {
       console.error("Error fetching floors:", error);
       toast({
         title: "Error",
-        description: "Failed to load floors and rooms",
+        description: "Failed to load floors",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -173,21 +234,6 @@ export default function RoomSelector({
     return allRooms;
   };
 
-  const getRoomTypeIcon = (roomType: string) => {
-    const typeInfo = roomTypeLabels[roomType as keyof typeof roomTypeLabels];
-    return typeInfo ? typeInfo.icon : Building2;
-  };
-
-  const getRoomTypeLabel = (roomType: string) => {
-    const typeInfo = roomTypeLabels[roomType as keyof typeof roomTypeLabels];
-    return typeInfo ? typeInfo.label : roomType;
-  };
-
-  const getRoomTypeColor = (roomType: string) => {
-    const typeInfo = roomTypeLabels[roomType as keyof typeof roomTypeLabels];
-    return typeInfo ? typeInfo.color : "bg-gray-100 text-gray-800";
-  };
-
   const capacityRanges = [
     { value: "1-20", label: "1-20 seats" },
     { value: "21-50", label: "21-50 seats" },
@@ -240,6 +286,27 @@ export default function RoomSelector({
               className="pl-10"
             />
           </div>
+        </div>
+
+        {/* Building Selection */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Building</label>
+          <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a building" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Buildings</SelectItem>
+              {buildings.map((building) => (
+                <SelectItem key={building.id} value={building.id}>
+                  <div className="flex items-center space-x-2">
+                    <Building2 className="h-4 w-4" />
+                    <span>{building.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Floor Selection (Optional) */}
@@ -390,11 +457,20 @@ export default function RoomSelector({
                               room.room_type
                             )}`}
                           >
-                            <RoomTypeIcon className="h-3 w-3 mr-1" />
+                            {(() => {
+                              const IconComponent = getRoomTypeIcon(
+                                room.room_type
+                              );
+                              return <IconComponent className="h-3 w-3 mr-1" />;
+                            })()}
                             {getRoomTypeLabel(room.room_type)}
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                          <div className="flex items-center space-x-1">
+                            <Building2 className="h-3 w-3" />
+                            <span>{room.floor.building.name}</span>
+                          </div>
                           <div className="flex items-center space-x-1">
                             <MapPin className="h-3 w-3" />
                             <span>{room.floor.name}</span>
@@ -442,24 +518,22 @@ export default function RoomSelector({
                   )}`}
                 >
                   {(() => {
-                    const RoomTypeIcon = getRoomTypeIcon(
+                    const IconComponent = getRoomTypeIcon(
                       selectedRoom.room_type
                     );
-                    return <RoomTypeIcon className="h-3 w-3 mr-1" />;
+                    return <IconComponent className="h-3 w-3 mr-1" />;
                   })()}
                   {getRoomTypeLabel(selectedRoom.room_type)}
                 </Badge>
               </div>
               <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                 <div className="flex items-center space-x-1">
+                  <Building2 className="h-3 w-3" />
+                  <span>{selectedRoom.floor.building.name}</span>
+                </div>
+                <div className="flex items-center space-x-1">
                   <MapPin className="h-3 w-3" />
-                  <span>
-                    {
-                      floors.find((f) =>
-                        f.rooms.some((r) => r.id === selectedRoom.id)
-                      )?.name
-                    }
-                  </span>
+                  <span>{selectedRoom.floor.name}</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <Users className="h-3 w-3" />

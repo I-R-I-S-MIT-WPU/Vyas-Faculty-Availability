@@ -1,15 +1,27 @@
+export interface Building {
+  id: string;
+  name: string;
+  address: string | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Floor {
   id: string;
   number: number;
   name: string;
+  building_id: string;
   created_at: string;
+  building?: Building;
 }
 
 export interface Room {
   id: string;
   name: string;
   floor_id: string;
-  room_type: 'classroom' | 'lab' | 'auditorium' | 'conference' | 'seminar';
+  room_type: 'classroom' | 'lab' | 'auditorium' | 'conference' | 'seminar' | 'discussion';
   capacity: number | null;
   equipment: string[] | null;
   is_active: boolean;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Booking, Room, Profile, Floor } from "@/types/database";
+import { Booking, Room, Profile, Floor, Building } from "@/types/database";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -26,11 +26,12 @@ import {
   Filter,
   UserCheck,
   UserX,
-  Building,
+  Building as BuildingIcon,
   Plus,
   Edit,
   Settings,
   FileText,
+  Building2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
@@ -56,6 +57,7 @@ import {
 } from "@/components/ui/select";
 import { RoomManagementDialog } from "@/components/admin/RoomManagementDialog";
 import { FloorManagementDialog } from "@/components/admin/FloorManagementDialog";
+import BuildingManagementDialog from "@/components/admin/BuildingManagementDialog";
 import { ReportGenerator } from "@/components/admin/ReportGenerator";
 
 const AdminDashboard = () => {
@@ -64,6 +66,7 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState<Profile[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [floors, setFloors] = useState<Floor[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("bookings");
   const [searchTerm, setSearchTerm] = useState("");
@@ -78,6 +81,10 @@ const AdminDashboard = () => {
   const [floorDialog, setFloorDialog] = useState<{
     open: boolean;
     floor?: Floor | null;
+  }>({ open: false });
+  const [buildingDialog, setBuildingDialog] = useState<{
+    open: boolean;
+    building?: Building | null;
   }>({ open: false });
 
   useEffect(() => {
@@ -116,6 +123,7 @@ const AdminDashboard = () => {
         fetchAllUsers(),
         fetchAllRooms(),
         fetchAllFloors(),
+        fetchAllBuildings(),
       ]);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -173,11 +181,30 @@ const AdminDashboard = () => {
   const fetchAllFloors = async () => {
     const { data, error } = await supabase
       .from("floors")
-      .select("*")
+      .select(
+        `
+        *,
+        building:buildings(*)
+      `
+      )
       .order("number", { ascending: true });
 
     if (error) throw error;
     setFloors(data || []);
+  };
+
+  const fetchAllBuildings = async () => {
+    const { data, error } = await supabase
+      .from("buildings")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+    setBuildings(data || []);
+  };
+
+  const handleBuildingAdded = (building: Building) => {
+    setBuildings((prev) => [...prev, building]);
   };
 
   const deleteBooking = async (bookingId: string) => {
@@ -317,6 +344,32 @@ const AdminDashboard = () => {
     }
   };
 
+  const deleteBuilding = async (buildingId: string) => {
+    try {
+      const { error } = await supabase
+        .from("buildings")
+        .delete()
+        .eq("id", buildingId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Building deleted successfully",
+      });
+
+      fetchAllBuildings();
+    } catch (error) {
+      console.error("Error deleting building:", error);
+      toast({
+        title: "Error",
+        description:
+          "Failed to delete building. It may have floors associated with it.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const formatDateTime = (dateString: string) => {
     return format(parseISO(dateString), "MMM dd, yyyy 'at' h:mm a");
   };
@@ -375,7 +428,12 @@ const AdminDashboard = () => {
   const filteredFloors = floors.filter(
     (floor) =>
       floor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      floor.number.toString().includes(searchTerm)
+      floor.number.toString().includes(searchTerm) ||
+      floor.building?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredBuildings = buildings.filter((building) =>
+    building.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (!user) {
@@ -454,7 +512,7 @@ const AdminDashboard = () => {
                 value="rooms"
                 className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
               >
-                <Building className="h-4 w-4" />
+                <BuildingIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Rooms ({rooms.length})</span>
                 <span className="sm:hidden">Rooms</span>
               </TabsTrigger>
@@ -467,6 +525,16 @@ const AdminDashboard = () => {
                   Floors ({floors.length})
                 </span>
                 <span className="sm:hidden">Floors</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="buildings"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <Building2 className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  Buildings ({buildings.length})
+                </span>
+                <span className="sm:hidden">Buildings</span>
               </TabsTrigger>
               <TabsTrigger
                 value="reports"
@@ -774,7 +842,7 @@ const AdminDashboard = () => {
             ) : filteredRooms.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-8">
-                  <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <BuildingIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No rooms found</h3>
                   <p className="text-muted-foreground">
                     {searchTerm
@@ -816,6 +884,10 @@ const AdminDashboard = () => {
                               ? "Conference Room"
                               : room.room_type === "auditorium"
                               ? "Hall"
+                              : room.room_type === "seminar"
+                              ? "Seminar Room"
+                              : room.room_type === "discussion"
+                              ? "Discussion Room"
                               : room.room_type}
                           </Badge>
                         </div>
@@ -946,12 +1018,26 @@ const AdminDashboard = () => {
                     <Card key={floor.id} className="animate-fadeIn">
                       <CardHeader>
                         <CardTitle className="text-lg">{floor.name}</CardTitle>
-                        <CardDescription>
-                          Floor Number: {floor.number}
+                        <CardDescription className="flex items-center space-x-2">
+                          <span>Floor Number: {floor.number}</span>
+                          {floor.building && (
+                            <>
+                              <span>•</span>
+                              <span>{floor.building.name}</span>
+                            </>
+                          )}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Building:
+                            </span>
+                            <Badge variant="outline">
+                              {floor.building?.name || "No building assigned"}
+                            </Badge>
+                          </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">
                               Rooms:
@@ -1020,6 +1106,139 @@ const AdminDashboard = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="buildings" className="space-y-4">
+            {/* Building Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search buildings..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <BuildingManagementDialog onBuildingAdded={handleBuildingAdded} />
+            </div>
+
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredBuildings.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    No buildings found
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {searchTerm
+                      ? "Try adjusting your search criteria."
+                      : "There are no buildings in the system."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBuildings.map((building) => (
+                  <Card key={building.id} className="animate-fadeIn">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{building.name}</CardTitle>
+                      <CardDescription>
+                        {building.address || "No address specified"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {building.description && (
+                          <p className="text-sm text-muted-foreground">
+                            {building.description}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Floors:</span>
+                          <Badge variant="outline">
+                            {
+                              floors.filter(
+                                (floor) => floor.building_id === building.id
+                              ).length
+                            }{" "}
+                            floors
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge
+                            variant={
+                              building.is_active ? "default" : "secondary"
+                            }
+                          >
+                            {building.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Created:
+                          </span>
+                          <span>
+                            {format(
+                              parseISO(building.created_at),
+                              "MMM dd, yyyy"
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-4">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Building
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this building?
+                                This action cannot be undone. Any existing
+                                floors on this building will prevent deletion.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteBuilding(building.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete Building
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="reports" className="space-y-4">
             <ReportGenerator />
           </TabsContent>
@@ -1044,6 +1263,13 @@ const AdminDashboard = () => {
             fetchAllFloors();
             setFloorDialog({ open: false });
           }}
+        />
+
+        <BuildingManagementDialog
+          open={buildingDialog.open}
+          onOpenChange={(open) => setBuildingDialog({ open })}
+          building={buildingDialog.building}
+          onBuildingSaved={handleBuildingAdded}
         />
       </main>
     </div>

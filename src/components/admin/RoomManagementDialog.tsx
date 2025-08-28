@@ -37,6 +37,7 @@ const ROOM_TYPES = [
   { value: "conference", label: "Conference Room" },
   { value: "auditorium", label: "Hall" },
   { value: "seminar", label: "Seminar Room" },
+  { value: "discussion", label: "Discussion Room" },
 ];
 
 export const RoomManagementDialog = ({
@@ -86,7 +87,12 @@ export const RoomManagementDialog = ({
     try {
       const { data, error } = await supabase
         .from("floors")
-        .select("*")
+        .select(
+          `
+          *,
+          building:buildings(*)
+        `
+        )
         .order("number");
 
       if (error) throw error;
@@ -226,7 +232,7 @@ export const RoomManagementDialog = ({
               <SelectContent>
                 {floors.map((floor) => (
                   <SelectItem key={floor.id} value={floor.id}>
-                    {floor.name}
+                    {floor.name} - {floor.building?.name || "No Building"}
                   </SelectItem>
                 ))}
               </SelectContent>

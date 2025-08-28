@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "@/components/layout/Header";
 import RoomCalendar from "@/components/calendar/RoomCalendar";
 import RoomSelector from "@/components/selectors/RoomSelector";
+import FreeRooms from "@/components/selectors/FreeRooms";
 import { Room } from "@/types/database";
 
 const Index = () => {
@@ -19,6 +20,9 @@ const Index = () => {
                 selectedRoom={selectedRoom}
                 onRoomSelect={setSelectedRoom}
               />
+              <div className="mt-6">
+                <FreeRooms onRoomSelect={setSelectedRoom} />
+              </div>
             </div>
           </div>
 
