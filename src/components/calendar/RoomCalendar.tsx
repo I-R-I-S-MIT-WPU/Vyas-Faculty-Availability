@@ -2,8 +2,16 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { Room, Booking } from "@/types/database";
+import { Room, Booking, Floor, Building } from "@/types/database";
 import { useAuth } from "@/hooks/useAuth";
 import {
   format,
@@ -27,12 +35,79 @@ import {
   Plus,
   Clock,
   AlertCircle,
+  Building2,
+  MapPin,
+  Users,
+  X,
 } from "lucide-react";
 import BookingDialog from "./BookingDialog";
 import { toast } from "@/hooks/use-toast";
+import FreeRooms from "@/components/selectors/FreeRooms";
+
+// Room type mapping (mirrors left sidebar look & feel)
+const roomTypeLabels: Record<
+  string,
+  { label: string; color: string; icon: any }
+> = {
+  classroom: {
+    label: "Lecture Room",
+    icon: Building2,
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300",
+  },
+  lab: {
+    label: "Lab",
+    icon: Users,
+    color:
+      "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300",
+  },
+  conference: {
+    label: "Conference Room",
+    icon: Users,
+    color:
+      "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300",
+  },
+  auditorium: {
+    label: "Hall",
+    icon: Users,
+    color:
+      "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300",
+  },
+  seminar: {
+    label: "Seminar Room",
+    icon: Users,
+    color:
+      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300",
+  },
+  discussion: {
+    label: "Discussion Room",
+    icon: Users,
+    color: "bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-300",
+  },
+};
+
+const getRoomTypeLabel = (roomType: string) =>
+  roomTypeLabels[roomType]?.label || roomType;
+const getRoomTypeColor = (roomType: string) =>
+  roomTypeLabels[roomType]?.color ||
+  "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
+const getRoomTypeIcon = (roomType: string) =>
+  roomTypeLabels[roomType]?.icon || Building2;
+
+// Capacity-based subtle background
+const getCapacityBgClass = (capacity?: number) => {
+  if (!capacity) return "bg-muted/30";
+  if (capacity > 100)
+    return "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800";
+  if (capacity > 60)
+    return "bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800";
+  if (capacity > 30)
+    return "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800";
+  return "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800";
+};
 
 interface RoomCalendarProps {
   selectedRoom: Room | null;
+  onRoomSelect?: (room: Room | null) => void;
 }
 
 // Updated time slots from 7:30 to 22:30 (10:30 PM)
@@ -54,7 +129,10 @@ const timeSlots = [
   { start: "21:30", display: "9:30-10:30", hour: 21, minute: 30 },
 ];
 
-export default function RoomCalendar({ selectedRoom }: RoomCalendarProps) {
+export default function RoomCalendar({
+  selectedRoom,
+  onRoomSelect,
+}: RoomCalendarProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -65,6 +143,16 @@ export default function RoomCalendar({ selectedRoom }: RoomCalendarProps) {
   } | null>(null);
   const { user } = useAuth();
 
+  // Simple discovery state when no room selected
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string>("");
+  const [floors, setFloors] = useState<
+    (Floor & { rooms: Room[]; building: Building })[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roomType, setRoomType] = useState("");
+  const [minCapacity, setMinCapacity] = useState("");
+
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -74,6 +162,50 @@ export default function RoomCalendar({ selectedRoom }: RoomCalendarProps) {
       fetchBookings();
     }
   }, [currentWeek, selectedRoom]);
+
+  useEffect(() => {
+    // Fetch buildings once for discovery view
+    const fetchBuildings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("buildings")
+          .select("*")
+          .eq("is_active", true)
+          .order("name");
+        if (error) throw error;
+        const list = data || [];
+        setBuildings(list);
+        // Default to Vyas if present
+        const vyas = list.find((b) => b.name?.toLowerCase() === "vyas");
+        setSelectedBuildingId((vyas || list[0])?.id || "");
+      } catch (e) {
+        console.error("Error loading buildings", e);
+      }
+    };
+    if (!selectedRoom) {
+      fetchBuildings();
+    }
+  }, [selectedRoom]);
+
+  useEffect(() => {
+    const fetchFloors = async () => {
+      if (!selectedBuildingId) return;
+      try {
+        const { data, error } = await supabase
+          .from("floors")
+          .select(`*, rooms (*), building:buildings(*)`)
+          .eq("building_id", selectedBuildingId)
+          .order("number");
+        if (error) throw error;
+        setFloors((data as any) || []);
+      } catch (e) {
+        console.error("Error loading floors", e);
+      }
+    };
+    if (!selectedRoom) {
+      fetchFloors();
+    }
+  }, [selectedBuildingId, selectedRoom]);
 
   const fetchBookings = async () => {
     if (!selectedRoom) return;
@@ -176,14 +308,178 @@ export default function RoomCalendar({ selectedRoom }: RoomCalendarProps) {
   };
 
   if (!selectedRoom) {
+    // Filter and flatten rooms
+    const allRooms = floors.flatMap((f) =>
+      f.rooms.map((r) => ({ room: r, floor: f }))
+    );
+    const filteredRooms = allRooms.filter(({ room }) => {
+      const matchesSearch = searchTerm
+        ? room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          room.room_type.toLowerCase().includes(searchTerm.toLowerCase())
+        : true;
+      const matchesType =
+        roomType && roomType !== "any" ? room.room_type === roomType : true;
+      const matchesCapacity =
+        minCapacity && minCapacity !== "any"
+          ? (room.capacity || 0) >= parseInt(minCapacity)
+          : true;
+      return matchesSearch && matchesType && matchesCapacity;
+    });
+
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            Please select a room to view its schedule
-          </p>
-        </div>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Start by choosing a building
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Building</label>
+                <Select
+                  value={selectedBuildingId}
+                  onValueChange={setSelectedBuildingId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select building" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {buildings.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Search</label>
+                <Input
+                  placeholder="Room name or type"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Room type</label>
+                  <Select value={roomType} onValueChange={setRoomType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="classroom">Classroom</SelectItem>
+                      <SelectItem value="lab">Laboratory</SelectItem>
+                      <SelectItem value="conference">Conference</SelectItem>
+                      <SelectItem value="auditorium">Auditorium</SelectItem>
+                      <SelectItem value="seminar">Seminar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Min capacity</label>
+                  <Select value={minCapacity} onValueChange={setMinCapacity}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="20">20+</SelectItem>
+                      <SelectItem value="30">30+</SelectItem>
+                      <SelectItem value="50">50+</SelectItem>
+                      <SelectItem value="100">100+</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Rooms</CardTitle>
+            {/* Compact Find Free Rooms trigger inside selector box */}
+            <FreeRooms
+              compactTrigger
+              onRoomSelect={(r) =>
+                onRoomSelect && onRoomSelect(r as unknown as Room)
+              }
+            />
+          </CardHeader>
+          <CardContent>
+            {filteredRooms.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Clock className="h-10 w-10 mx-auto mb-2" />
+                <div>No rooms match your filters</div>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                {Array.from(
+                  filteredRooms.reduce((map, item) => {
+                    const floorName = item.floor?.name || "Other";
+                    if (!map.has(floorName))
+                      map.set(floorName, [] as typeof filteredRooms);
+                    map.get(floorName)!.push(item);
+                    return map;
+                  }, new Map<string, typeof filteredRooms>())
+                ).map(([floorName, roomsOnFloor]) => (
+                  <div key={floorName}>
+                    <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
+                      <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                        <MapPin className="h-3 w-3" /> {floorName}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-1">
+                      {roomsOnFloor.map(({ room, floor }) => {
+                        const TypeIcon = getRoomTypeIcon(room.room_type);
+                        const typeColor = getRoomTypeColor(room.room_type);
+                        const capBg = getCapacityBgClass(room.capacity);
+                        return (
+                          <div
+                            key={room.id}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm hover:border-primary/50 ${capBg}`}
+                            onClick={() => onRoomSelect && onRoomSelect(room)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <h4 className="font-medium text-sm">
+                                    {room.name}
+                                  </h4>
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-xs ${typeColor}`}
+                                  >
+                                    <TypeIcon className="h-3 w-3 mr-1" />
+                                    {getRoomTypeLabel(room.room_type)}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center space-x-1">
+                                    <Building2 className="h-3 w-3" />
+                                    <span>{floor.building.name}</span>
+                                  </div>
+                                  <div className="flex items-center space-x-1">
+                                    <Users className="h-3 w-3" />
+                                    <span>{room.capacity || "N/A"} seats</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -241,9 +537,22 @@ export default function RoomCalendar({ selectedRoom }: RoomCalendarProps) {
             <span className="text-lg sm:text-xl font-bold">
               {selectedRoom.name}
             </span>
-            <Badge variant="secondary" className="text-xs sm:text-sm">
-              {selectedRoom.room_type} • {selectedRoom.capacity} seats
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs sm:text-sm">
+                {selectedRoom.room_type} • {selectedRoom.capacity} seats
+              </Badge>
+              {onRoomSelect && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => onRoomSelect && onRoomSelect(null)}
+                  aria-label="Close room"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-2 sm:px-6">

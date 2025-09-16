@@ -1,0 +1,59 @@
+VYAS ROOM FLOW - PROJECT DOCUMENTATION
+
+OVERVIEW
+Vyas Room Flow is a modern room booking and scheduling system designed for educational institutions. It provides a comprehensive solution for managing room reservations across multiple floors of a building, with features for calendar visualization, room selection, booking management, and user authentication.
+
+TECH STACK
+Frontend:
+- React 18 with TypeScript
+- Vite (build tool and dev server)
+- React Router DOM (navigation)
+- Tailwind CSS (styling)
+- shadcn/ui (UI component library)
+- React Query (@tanstack/react-query) (data fetching/caching)
+- React Hook Form + Zod (form handling/validation)
+- Lucide React (icons)
+- Next Themes (dark/light mode)
+
+Backend & Database:
+- Supabase (Backend-as-a-Service)
+  - PostgreSQL database
+  - Real-time subscriptions
+  - Row Level Security (RLS)
+  - Built-in authentication
+  - REST API
+
+HOSTING
+- Frontend: Vercel (recommended)
+- Backend: Supabase Cloud
+
+FEATURES
+- Room Calendar View with visual availability display
+- Room filtering by floor, type, and capacity
+- Booking creation, modification, and cancellation
+- User authentication and profile management
+- Admin dashboard for room/floor management
+- Real-time updates
+- Dark/light theme support
+- Responsive design (mobile/desktop)
+- Form validation and error handling
+- Toast notifications
+- PDF report generation
+
+DEPENDENCIES
+Main Dependencies:
+- @supabase/supabase-js: Supabase client
+- react: UI framework
+- react-dom: React DOM rendering
+- react-router-dom: Client-side routing
+- @tanstack/react-query: Data fetching
+- react-hook-form: Form handling
+- zod: Schema validation
+- tailwindcss: CSS framework
+- lucide-react: Icon library
+
+Development Dependencies:
+- vite: Build tool
+- typescript: Type checking
+- eslint: Code linting
+- @vitejs/plugin-react-swc: React plugin for Vite

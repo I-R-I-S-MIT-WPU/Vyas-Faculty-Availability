@@ -129,9 +129,12 @@ export default function RoomSelector({
       if (error) throw error;
       setBuildings(buildingsData || []);
 
-      // Set default building if available
+      // Prefer default to building named "Vyas" (case-insensitive), else first
       if (buildingsData && buildingsData.length > 0) {
-        setSelectedBuilding(buildingsData[0].id);
+        const vyas = buildingsData.find(
+          (b) => b.name?.toLowerCase() === "vyas"
+        );
+        setSelectedBuilding((vyas || buildingsData[0]).id);
       }
     } catch (error) {
       console.error("Error fetching buildings:", error);
@@ -296,7 +299,6 @@ export default function RoomSelector({
               <SelectValue placeholder="Select a building" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Buildings</SelectItem>
               {buildings.map((building) => (
                 <SelectItem key={building.id} value={building.id}>
                   <div className="flex items-center space-x-2">
@@ -317,7 +319,6 @@ export default function RoomSelector({
               <SelectValue placeholder="All floors" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All floors</SelectItem>
               {floors.map((floor) => (
                 <SelectItem key={floor.id} value={floor.id}>
                   <div className="flex items-center space-x-2">
@@ -434,62 +435,107 @@ export default function RoomSelector({
               )}
             </div>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {filteredRooms.map((room) => {
-                const RoomTypeIcon = getRoomTypeIcon(room.room_type);
-                return (
-                  <div
-                    key={room.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                      selectedRoom?.id === room.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                    onClick={() => onRoomSelect(room)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-medium text-sm">{room.name}</h4>
-                          <Badge
-                            variant="secondary"
-                            className={`text-xs ${getRoomTypeColor(
-                              room.room_type
-                            )}`}
-                          >
-                            {(() => {
-                              const IconComponent = getRoomTypeIcon(
-                                room.room_type
-                              );
-                              return <IconComponent className="h-3 w-3 mr-1" />;
-                            })()}
-                            {getRoomTypeLabel(room.room_type)}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                          <div className="flex items-center space-x-1">
-                            <Building2 className="h-3 w-3" />
-                            <span>{room.floor.building.name}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <MapPin className="h-3 w-3" />
-                            <span>{room.floor.name}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <Users className="h-3 w-3" />
-                            <span>{room.capacity || "N/A"} seats</span>
-                          </div>
-                        </div>
-                      </div>
-                      {selectedRoom?.id === room.id && (
-                        <div className="text-primary">
-                          <div className="w-2 h-2 bg-primary rounded-full"></div>
-                        </div>
-                      )}
+            <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+              {Array.from(
+                filteredRooms.reduce((map, room) => {
+                  const floorName =
+                    (room as any)?.floor?.name ||
+                    floors.find((f) => f.rooms.some((r) => r.id === room.id))
+                      ?.name ||
+                    "Other";
+                  if (!map.has(floorName))
+                    map.set(floorName, [] as typeof filteredRooms);
+                  map.get(floorName)!.push(room);
+                  return map;
+                }, new Map<string, typeof filteredRooms>())
+              ).map(([floorName, roomsOnFloor]) => (
+                <div key={floorName}>
+                  <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
+                    <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                      <MapPin className="h-3 w-3" /> {floorName}
                     </div>
                   </div>
-                );
-              })}
+                  <div className="space-y-2 mt-1">
+                    {roomsOnFloor.map((room) => {
+                      const RoomTypeIcon = getRoomTypeIcon(room.room_type);
+                      return (
+                        <div
+                          key={room.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
+                            selectedRoom?.id === room.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                          onClick={() => onRoomSelect(room)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <h4 className="font-medium text-sm">
+                                  {room.name}
+                                </h4>
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-xs ${getRoomTypeColor(
+                                    room.room_type
+                                  )}`}
+                                >
+                                  {(() => {
+                                    const IconComponent = getRoomTypeIcon(
+                                      room.room_type
+                                    );
+                                    return (
+                                      <IconComponent className="h-3 w-3 mr-1" />
+                                    );
+                                  })()}
+                                  {getRoomTypeLabel(room.room_type)}
+                                </Badge>
+                              </div>
+                              {(() => {
+                                const buildingName =
+                                  (room as any)?.floor?.building?.name ||
+                                  floors.find((f) =>
+                                    f.rooms.some((r) => r.id === room.id)
+                                  )?.building?.name ||
+                                  "";
+                                const floorName =
+                                  (room as any)?.floor?.name ||
+                                  floors.find((f) =>
+                                    f.rooms.some((r) => r.id === room.id)
+                                  )?.name ||
+                                  "";
+                                return (
+                                  <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                                    <div className="flex items-center space-x-1">
+                                      <Building2 className="h-3 w-3" />
+                                      <span>{buildingName || "—"}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <MapPin className="h-3 w-3" />
+                                      <span>{floorName || "—"}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <Users className="h-3 w-3" />
+                                      <span>
+                                        {room.capacity || "N/A"} seats
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                            {selectedRoom?.id === room.id && (
+                              <div className="text-primary">
+                                <div className="w-2 h-2 bg-primary rounded-full"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -526,20 +572,33 @@ export default function RoomSelector({
                   {getRoomTypeLabel(selectedRoom.room_type)}
                 </Badge>
               </div>
-              <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                <div className="flex items-center space-x-1">
-                  <Building2 className="h-3 w-3" />
-                  <span>{selectedRoom.floor.building.name}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <MapPin className="h-3 w-3" />
-                  <span>{selectedRoom.floor.name}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <Users className="h-3 w-3" />
-                  <span>{selectedRoom.capacity || "N/A"} seats</span>
-                </div>
-              </div>
+              {(() => {
+                const fallbackFloor = floors.find((f) =>
+                  f.rooms.some((r) => r.id === selectedRoom.id)
+                );
+                const buildingName =
+                  selectedRoom?.floor?.building?.name ||
+                  fallbackFloor?.building?.name ||
+                  "";
+                const floorName =
+                  selectedRoom?.floor?.name || fallbackFloor?.name || "";
+                return (
+                  <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                    <div className="flex items-center space-x-1">
+                      <Building2 className="h-3 w-3" />
+                      <span>{buildingName || "—"}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="h-3 w-3" />
+                      <span>{floorName || "—"}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Users className="h-3 w-3" />
+                      <span>{selectedRoom.capacity || "N/A"} seats</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

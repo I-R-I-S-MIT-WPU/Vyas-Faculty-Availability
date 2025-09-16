@@ -50,6 +50,7 @@ interface RoomWithFloor extends Room {
 interface FreeRoomsProps {
   classOnly?: boolean; // if true, filter to classroom type
   onRoomSelect?: (room: RoomWithFloor) => void; // callback to select a room
+  compactTrigger?: boolean; // if true, render only a small trigger button + dialog
 }
 
 function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
@@ -74,6 +75,7 @@ function isRoomFree(
 export default function FreeRooms({
   classOnly = true,
   onRoomSelect,
+  compactTrigger = false,
 }: FreeRoomsProps) {
   const [rooms, setRooms] = useState<RoomWithFloor[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -85,6 +87,8 @@ export default function FreeRooms({
   const [preset, setPreset] = useState<Preset>("now");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
+  const [filterRoomType, setFilterRoomType] = useState<string>("any");
+  const [filterMinCapacity, setFilterMinCapacity] = useState<string>("any");
 
   // Load buildings, rooms and today's bookings in one go
   useEffect(() => {
@@ -208,11 +212,29 @@ export default function FreeRooms({
     return { windowStart: s, windowEnd: e };
   }, [preset, customStart, customEnd]);
 
+  const typeMatches = (room: RoomWithFloor) =>
+    filterRoomType === "any" || room.room_type === filterRoomType;
+  const capacityMatches = (room: RoomWithFloor) =>
+    filterMinCapacity === "any" ||
+    (room.capacity || 0) >= parseInt(filterMinCapacity);
+
   const freeRoomsInWindow = useMemo(() => {
-    return filteredRooms.filter((r) =>
-      isRoomFree(bookingsByRoom, r.id, windowStart, windowEnd)
-    );
-  }, [filteredRooms, bookingsByRoom, windowStart, windowEnd]);
+    return filteredRooms
+      .filter((r) => filterRoomType === "any" || r.room_type === filterRoomType)
+      .filter(
+        (r) =>
+          filterMinCapacity === "any" ||
+          (r.capacity || 0) >= parseInt(filterMinCapacity)
+      )
+      .filter((r) => isRoomFree(bookingsByRoom, r.id, windowStart, windowEnd));
+  }, [
+    filteredRooms,
+    bookingsByRoom,
+    windowStart,
+    windowEnd,
+    filterRoomType,
+    filterMinCapacity,
+  ]);
 
   // Get all free rooms from current time onwards for the dialog
   const getFreeRoomsFromNow = useMemo(() => {
@@ -237,10 +259,20 @@ export default function FreeRooms({
       const nextHour = new Date(currentHour);
       nextHour.setHours(nextHour.getHours() + 1);
 
-      // Find rooms free in this hour
-      const freeRoomsInHour = filteredRooms.filter((room) =>
-        isRoomFree(bookingsByRoom, room.id, currentHour, nextHour)
-      );
+      // Find rooms free in this hour, applying filters
+      const freeRoomsInHour = filteredRooms
+        .filter(
+          (room) =>
+            filterRoomType === "any" || room.room_type === filterRoomType
+        )
+        .filter(
+          (room) =>
+            filterMinCapacity === "any" ||
+            (room.capacity || 0) >= parseInt(filterMinCapacity)
+        )
+        .filter((room) =>
+          isRoomFree(bookingsByRoom, room.id, currentHour, nextHour)
+        );
 
       if (freeRoomsInHour.length > 0) {
         // Format time like the calendar: "2:30-3:30"
@@ -265,6 +297,153 @@ export default function FreeRooms({
       onRoomSelect(room);
     }
   };
+
+  if (compactTrigger) {
+    return (
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Search className="h-4 w-4 mr-2" />
+            Find Free Rooms
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="flex items-center space-x-2 text-lg sm:text-xl">
+              <Clock className="h-5 w-5 text-blue-600" />
+              <span>Free Rooms by Hour</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              Showing all rooms that are free in each time slot from now until
+              end of day
+            </DialogDescription>
+          </DialogHeader>
+          {/* Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Building</label>
+              <Select
+                value={selectedBuilding}
+                onValueChange={setSelectedBuilding}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  {buildings.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Room type</label>
+              <Select value={filterRoomType} onValueChange={setFilterRoomType}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="classroom">Classroom</SelectItem>
+                  <SelectItem value="lab">Laboratory</SelectItem>
+                  <SelectItem value="conference">Conference</SelectItem>
+                  <SelectItem value="auditorium">Auditorium</SelectItem>
+                  <SelectItem value="seminar">Seminar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Min capacity</label>
+              <Select
+                value={filterMinCapacity}
+                onValueChange={setFilterMinCapacity}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="20">20+</SelectItem>
+                  <SelectItem value="30">30+</SelectItem>
+                  <SelectItem value="50">50+</SelectItem>
+                  <SelectItem value="100">100+</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {getFreeRoomsFromNow.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                  No free rooms available for the rest of the day
+                </p>
+              </div>
+            ) : (
+              getFreeRoomsFromNow.map(({ hour, rooms }) => (
+                <div
+                  key={hour}
+                  className="flex flex-col p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {hour}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                        {rooms.length} room{rooms.length !== 1 ? "s" : ""}{" "}
+                        available
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {rooms.slice(0, 3).map((room) => (
+                      <div
+                        key={room.id}
+                        className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer group"
+                        onClick={() => handleRoomClick(room)}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0">
+                          <span className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 group-hover:text-blue-800 dark:group-hover:text-blue-200">
+                            {room.name}
+                          </span>
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <Building2 className="h-3 w-3" />
+                            <span className="hidden sm:inline">
+                              {room.floor.building.name}
+                            </span>
+                            <span className="sm:hidden">
+                              {room.floor.building.name.split(" ")[0]}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <MapPin className="h-3 w-3" />
+                            <span>{room.floor.name}</span>
+                          </div>
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <Users className="h-3 w-3" />
+                            <span>{room.capacity || "N/A"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {rooms.length > 3 && (
+                      <div className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium">
+                        +{rooms.length - 3} more rooms
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Card className="shadow-lg border-0 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
@@ -297,6 +476,64 @@ export default function FreeRooms({
                   until end of day
                 </DialogDescription>
               </DialogHeader>
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Building</label>
+                  <Select
+                    value={selectedBuilding}
+                    onValueChange={setSelectedBuilding}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {buildings.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Room type</label>
+                  <Select
+                    value={filterRoomType}
+                    onValueChange={setFilterRoomType}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="classroom">Classroom</SelectItem>
+                      <SelectItem value="lab">Laboratory</SelectItem>
+                      <SelectItem value="conference">Conference</SelectItem>
+                      <SelectItem value="auditorium">Auditorium</SelectItem>
+                      <SelectItem value="seminar">Seminar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Min capacity</label>
+                  <Select
+                    value={filterMinCapacity}
+                    onValueChange={setFilterMinCapacity}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="20">20+</SelectItem>
+                      <SelectItem value="30">30+</SelectItem>
+                      <SelectItem value="50">50+</SelectItem>
+                      <SelectItem value="100">100+</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="space-y-3">
                 {getFreeRoomsFromNow.length === 0 ? (
                   <div className="text-center py-8">
