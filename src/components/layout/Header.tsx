@@ -63,16 +63,16 @@ export default function Header() {
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-      <div className="container flex h-16 items-center justify-between">
+      <div className="flex h-16 w-full items-center justify-between px-4 md:px-6">
         <Link to="/" className="flex items-center space-x-2">
-          <Calendar className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">Vyaas Room Booking</h1>
+          {/*<img src="/logo3.png" alt="Logo" className="h-6 w-6" />*/}
+          <Calendar className="h-6 w-6 text-indigo-500" />
+          <h1 className="text-xl font-bold text-indigo-500">Vyas Room Booking</h1>
         </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">
-          <ThemeToggle />
-
+      
           {!loading && (
             <>
               {user ? (
@@ -97,10 +97,10 @@ export default function Header() {
                     </Link>
                   )}
 
-                  <Link to="/settings">
-                    <Button variant="ghost" size="sm">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
+                  <Link to="/">
+                    <Button variant="default" size="sm">
+                      <Calendar className="h-4 w-4 mr-2" />
+                        Book Room
                     </Button>
                   </Link>
 
@@ -111,11 +111,18 @@ export default function Header() {
                       <div className="flex items-center">
                         <Shield
                           className="h-4 w-4 text-blue-600"
-                          title="Admin User"
+                          aria-label="Admin User"
                         />
                       </div>
                     )}
                   </div>
+
+                  <Link to="/Settings">
+                    <Button variant="ghost" size="sm">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Settings
+                    </Button>
+                  </Link>
 
                   <Button variant="outline" size="sm" onClick={handleSignOut}>
                     <LogOut className="h-4 w-4 mr-2" />
@@ -132,7 +139,12 @@ export default function Header() {
               )}
             </>
           )}
+          <ThemeToggle />
         </div>
+
+        
+
+        
 
         {/* Mobile Menu Button */}
         <div className="md:hidden flex items-center space-x-2">
@@ -157,7 +169,7 @@ export default function Header() {
       {mobileMenuOpen && user && (
         <div className="md:hidden border-t bg-background/95 backdrop-blur">
           <div className="container py-4 space-y-3">
-            <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+            <Link to="/" onClick={() => setMobileMenuOpen(false)}>
               <Button
                 variant="default"
                 size="sm"
@@ -181,7 +193,18 @@ export default function Header() {
               </Link>
             )}
 
-            <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
+            <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+              <Button
+                  variant="default"
+                  size="sm"
+                  className="w-full justify-start"
+                >
+                <Calendar className="h-4 w-4 mr-2" />
+                Book Room
+              </Button>
+            </Link>
+
+            <Link to="/Settings" onClick={() => setMobileMenuOpen(false)}>
               <Button
                 variant="ghost"
                 size="sm"

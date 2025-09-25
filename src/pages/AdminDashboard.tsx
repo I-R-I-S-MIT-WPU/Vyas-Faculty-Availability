@@ -479,7 +479,7 @@ const AdminDashboard = () => {
             Admin Dashboard
           </h1>
           <p className="text-muted-foreground mt-2 text-sm sm:text-base">
-            Manage users, bookings, and system settings
+            Manage users, bookings, and system Settings
           </p>
         </div>
 

@@ -124,7 +124,7 @@ const Settings = () => {
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
             <p className="text-muted-foreground">
-              Please sign in to access settings.
+              Please sign in to access Settings.
             </p>
           </div>
         </main>
@@ -325,7 +325,7 @@ const Settings = () => {
                 Security
               </CardTitle>
               <CardDescription>
-                Manage your account security settings
+                Manage your account security Settings
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
