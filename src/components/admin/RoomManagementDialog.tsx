@@ -55,6 +55,7 @@ export const RoomManagementDialog = ({
     capacity: "",
     equipment: [] as string[],
     is_active: true,
+    requires_approval: false,
   });
   const [equipmentInput, setEquipmentInput] = useState("");
 
@@ -69,6 +70,7 @@ export const RoomManagementDialog = ({
           capacity: room.capacity?.toString() || "",
           equipment: room.equipment || [],
           is_active: room.is_active,
+          requires_approval: !!room.requires_approval,
         });
       } else {
         setFormData({
@@ -78,6 +80,7 @@ export const RoomManagementDialog = ({
           capacity: "",
           equipment: [],
           is_active: true,
+          requires_approval: false,
         });
       }
     }
@@ -126,6 +129,7 @@ export const RoomManagementDialog = ({
         capacity: formData.capacity ? parseInt(formData.capacity) : null,
         equipment: formData.equipment.length > 0 ? formData.equipment : null,
         is_active: formData.is_active,
+        requires_approval: formData.requires_approval,
         updated_at: new Date().toISOString(),
       };
 
@@ -347,6 +351,36 @@ export const RoomManagementDialog = ({
                 <SelectItem value="false">Inactive</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="requires_approval" className="text-right">
+              Requires approval
+            </Label>
+            <div className="col-span-3 flex items-center gap-3">
+              <Select
+                value={formData.requires_approval ? "true" : "false"}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    requires_approval: value === "true",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="false">No</SelectItem>
+                  <SelectItem value="true">Yes</SelectItem>
+                </SelectContent>
+              </Select>
+              {formData.requires_approval && (
+                <Badge variant="outline" className="text-xs">
+                  Requests for this room need admin approval
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
 

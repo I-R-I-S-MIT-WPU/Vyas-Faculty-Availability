@@ -33,6 +33,7 @@ import {
   FileText,
   Building2,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import {
@@ -69,6 +70,7 @@ const AdminDashboard = () => {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("bookings");
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -144,13 +146,60 @@ const AdminDashboard = () => {
         `
         *,
         room:rooms(*),
-        profiles:profiles(full_name, email, is_admin)
+        owner:profiles!bookings_teacher_id_fkey(full_name, email, is_admin),
+        approver:profiles!bookings_approved_by_fkey(full_name, email)
       `
       )
       .order("start_time", { ascending: false });
 
     if (error) throw error;
-    setBookings(data || []);
+    const list = (data || []) as Booking[];
+    setBookings(
+      pendingOnly ? list.filter((b) => b.status === "pending") : list
+    );
+  };
+
+  const approveBooking = async (bookingId: string) => {
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          status: "confirmed",
+          approved_by: user?.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", bookingId);
+      if (error) throw error;
+      toast({
+        title: "Approved",
+        description: "Booking approved and confirmed.",
+      });
+      fetchAllBookings();
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: "Failed to approve booking",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const denyBooking = async (bookingId: string) => {
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "denied" })
+        .eq("id", bookingId);
+      if (error) throw error;
+      toast({ title: "Denied", description: "Booking request denied." });
+      fetchAllBookings();
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: "Failed to deny booking",
+        variant: "destructive",
+      });
+    }
   };
 
   const fetchAllUsers = async () => {
@@ -546,6 +595,24 @@ const AdminDashboard = () => {
             </TabsList>
           </div>
 
+          {activeTab === "bookings" && (
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-muted-foreground">
+                Review and manage booking requests
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">Show pending only</Label>
+                <Switch
+                  checked={pendingOnly}
+                  onCheckedChange={(v) => {
+                    setPendingOnly(v);
+                    fetchAllBookings();
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <TabsContent value="bookings" className="space-y-4">
             {/* Search and Filter */}
             <div className="flex flex-col sm:flex-row gap-4">
@@ -655,34 +722,52 @@ const AdminDashboard = () => {
                       </div>
 
                       <div className="flex justify-end mt-4">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Booking
+                        {booking.status === "pending" ? (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approveBooking(booking.id)}
+                            >
+                              Approve
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => denyBooking(booking.id)}
+                            >
+                              Deny
+                            </Button>
+                          </div>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4 mr-2" />
                                 Delete Booking
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this booking?
-                                This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteBooking(booking.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete Booking
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete Booking
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this booking?
+                                  This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteBooking(booking.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

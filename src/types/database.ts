@@ -25,6 +25,7 @@ export interface Room {
   capacity: number | null;
   equipment: string[] | null;
   is_active: boolean;
+  requires_approval?: boolean;
   created_at: string;
   updated_at: string;
   floor?: Floor;
@@ -52,10 +53,19 @@ export interface Booking {
   panel: string | null;
   year_course: string | null;
   is_recurring: boolean;
+  status?: 'confirmed' | 'pending' | 'denied' | 'cancelled';
+  approved_by?: string | null;
+  approved_at?: string | null;
   created_at: string;
   updated_at: string;
   room?: Room;
   profiles?: {
     full_name: string;
   };
+}
+
+export interface BookingInvitee {
+  booking_id: string;
+  invitee_id: string;
+  created_at: string;
 }

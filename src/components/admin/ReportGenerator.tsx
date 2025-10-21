@@ -80,7 +80,8 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
         `
         *,
         room:rooms(name, room_type, capacity, floor:floors(name)),
-        profiles:profiles(full_name, email, department)
+        owner:profiles!bookings_teacher_id_fkey(full_name, email, department),
+        approver:profiles!bookings_approved_by_fkey(full_name, email)
       `
       )
       .gte("start_time", startDate.toISOString())

@@ -122,6 +122,7 @@ export default function FreeRooms({
         const bookingsQuery = supabase
           .from("bookings")
           .select("*")
+          .eq("status", "confirmed")
           .gte("start_time", start)
           .lte("end_time", end);
 

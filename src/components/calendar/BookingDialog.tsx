@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { Room } from "@/types/database";
+import { Room, Profile } from "@/types/database";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { format, addHours, isWeekend, isBefore } from "date-fns";
 import { AlertCircle, Clock, Calendar, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 
 interface BookingDialogProps {
   open: boolean;
@@ -48,19 +49,26 @@ export default function BookingDialog({
   const [panel, setPanel] = useState("");
   const [yearCourse, setYearCourse] = useState("");
   const [loading, setLoading] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState("");
+  const [inviteSearchResults, setInviteSearchResults] = useState<Profile[]>([]);
+  const [selectedInvitees, setSelectedInvitees] = useState<Profile[]>([]);
+  const [sendEmails, setSendEmails] = useState(true);
+  const [emailInput, setEmailInput] = useState("");
+  const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const { user } = useAuth();
 
-  // Function to check for booking collisions
+  // Function to check for booking collisions (only confirmed bookings block)
   const checkBookingCollision = async (
     startTime: Date,
     endTime: Date
   ): Promise<boolean> => {
     try {
       // Get all bookings for this room
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("bookings")
         .select("*")
-        .eq("room_id", room.id);
+        .eq("room_id", room.id)
+        .eq("status", "confirmed");
 
       if (error) throw error;
 
@@ -81,7 +89,7 @@ export default function BookingDialog({
     }
   };
 
-  // Function to check for user booking conflicts
+  // Function to check for user booking conflicts (confirmed only)
   const checkUserBookingConflict = async (
     startTime: Date,
     endTime: Date
@@ -90,10 +98,11 @@ export default function BookingDialog({
 
     try {
       // Get all bookings for this user
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("bookings")
         .select("*")
-        .eq("teacher_id", user.id);
+        .eq("teacher_id", user.id)
+        .eq("status", "confirmed");
 
       if (error) throw error;
 
@@ -122,10 +131,7 @@ export default function BookingDialog({
       return "Cannot create bookings in the past";
     }
 
-    // Check if it's a weekend
-    if (isWeekend(startTime)) {
-      return "Bookings are not allowed on weekends";
-    }
+    // Weekends are allowed
 
     // Check if booking is within allowed hours (7:30 AM to 10:30 PM)
     const startHour = startTime.getHours();
@@ -198,17 +204,22 @@ export default function BookingDialog({
         return;
       }
 
-      const { error } = await supabase.from("bookings").insert({
-        room_id: room.id,
-        teacher_id: user.id,
-        title,
-        description: description || null,
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        class_division: classDivision || null,
-        panel: panel || null,
-        year_course: yearCourse || null,
-      });
+      const { data: inserted, error } = await supabase
+        .from("bookings")
+        .insert({
+          room_id: room.id,
+          teacher_id: user.id,
+          title,
+          description: description || null,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          class_division: classDivision || null,
+          panel: panel || null,
+          year_course: yearCourse || null,
+          status: room.requires_approval ? "pending" : "confirmed",
+        })
+        .select("id, title, description, start_time, end_time")
+        .single();
 
       if (error) {
         // Handle specific database constraint errors
@@ -225,14 +236,6 @@ export default function BookingDialog({
           toast({
             title: "Invalid Booking Time",
             description: "Cannot create bookings in the past.",
-            variant: "destructive",
-          });
-        } else if (
-          error.message.includes("Bookings are not allowed on weekends")
-        ) {
-          toast({
-            title: "Weekend Booking Not Allowed",
-            description: "Bookings are not allowed on weekends.",
             variant: "destructive",
           });
         } else if (
@@ -258,9 +261,107 @@ export default function BookingDialog({
         return;
       }
 
+      // Insert invitees if any
+      const bookingId = inserted?.id;
+      if (bookingId && selectedInvitees.length > 0) {
+        const inviteRows = selectedInvitees.map((p) => ({
+          booking_id: bookingId,
+          invitee_id: p.id,
+        }));
+        const { error: inviteErr } = await (supabase as any)
+          .from("booking_invitees")
+          .insert(inviteRows as any);
+        if (inviteErr) {
+          console.error("Failed to add invitees", inviteErr);
+        }
+      }
+
+      // Send emails using external email service
+      if (!room.requires_approval && sendEmails) {
+        try {
+          // Prepare email data
+          const startTime = new Date(inserted.start_time);
+          const endTime = new Date(inserted.end_time);
+          const date = startTime.toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+          const time = startTime.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          });
+          const duration = Math.round(
+            (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60)
+          ); // hours
+
+          // Get all email addresses
+          const allEmails = [
+            ...selectedInvitees.map((invitee) => invitee.email),
+            ...extraEmails,
+          ].filter(Boolean);
+
+          if (allEmails.length > 0) {
+            // Validate that we have all required data
+            if (!inserted.title || !date || !time || !room.name) {
+              console.warn("Missing required booking data for email:", {
+                title: inserted.title,
+                date,
+                time,
+                room: room.name,
+              });
+              return;
+            }
+
+            // Send email using the curl format you provided
+            const emailPayload = {
+              emails: allEmails,
+              bookingName: inserted.title,
+              date: date,
+              time: time,
+              room: room.name,
+              duration: `${duration} hour${duration !== 1 ? "s" : ""}`,
+              additionalInfo:
+                inserted.description || "No Additional Description",
+              userEmail: user.email,
+            };
+
+            const EMAIL_SERVICE_URL =
+              "https://oacrbzapchtoeshmmhrf.supabase.co/functions/v1/send-booking-emails";
+            const AUTH_TOKEN =
+              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hY3JiemFwY2h0b2VzaG1taHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwMzI3MDEsImV4cCI6MjA2OTYwODcwMX0.0JDDizFguhGhPT5ko3alQTEPtVHrq0AYKmqwzl0C-lg";
+
+            // Debug: Log the payload being sent
+            console.log("Sending email payload:", emailPayload);
+
+            const res = await fetch(EMAIL_SERVICE_URL, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${AUTH_TOKEN}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(emailPayload),
+            });
+
+            if (!res.ok) {
+              const errorText = await res.text().catch(() => "");
+              console.warn("Email service call failed:", res.status, errorText);
+            } else {
+              console.log("Emails sent successfully");
+            }
+          }
+        } catch (emailErr) {
+          console.warn("Email sending failed:", emailErr);
+        }
+      }
+
       toast({
-        title: "Success",
-        description: "Room booked successfully!",
+        title: room.requires_approval ? "Submitted for approval" : "Success",
+        description: room.requires_approval
+          ? "Your request is pending admin approval. You'll be notified upon decision."
+          : "Room booked successfully!",
       });
 
       onBookingCreated();
@@ -273,6 +374,11 @@ export default function BookingDialog({
       setClassDivision("");
       setPanel("");
       setYearCourse("");
+      setSelectedInvitees([]);
+      setInviteSearch("");
+      setExtraEmails([]);
+      setEmailInput("");
+      setSendEmails(true);
     } catch (error: any) {
       console.error("Booking error:", error);
       toast({
@@ -283,6 +389,64 @@ export default function BookingDialog({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Invitee search
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!inviteSearch.trim()) {
+        setInviteSearchResults([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .or(`full_name.ilike.%${inviteSearch}%,email.ilike.%${inviteSearch}%`)
+        .limit(8);
+      if (cancelled) return;
+      if (error) {
+        console.error("Invite search failed", error);
+        setInviteSearchResults([]);
+      } else {
+        // Exclude current user and already selected
+        const selectedIds = new Set(selectedInvitees.map((s) => s.id));
+        const filtered = (data || []).filter(
+          (p) => p.id !== user?.id && !selectedIds.has(p.id)
+        ) as Profile[];
+        setInviteSearchResults(filtered);
+      }
+    };
+    const t = setTimeout(run, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [inviteSearch, selectedInvitees, user?.id]);
+
+  const addInvitee = (p: Profile) => {
+    setSelectedInvitees((prev) => [...prev, p]);
+    setInviteSearch("");
+    setInviteSearchResults([]);
+  };
+
+  const removeInvitee = (id: string) => {
+    setSelectedInvitees((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const addExtraEmail = () => {
+    const value = emailInput.trim();
+    if (!value) return;
+    const email = value.toLowerCase();
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (isValid && !extraEmails.includes(email)) {
+      setExtraEmails((prev) => [...prev, email]);
+      setEmailInput("");
+    }
+  };
+
+  const removeExtraEmail = (email: string) => {
+    setExtraEmails((prev) => prev.filter((e) => e !== email));
   };
 
   const [hours, minutes] = time.split(":").map(Number);
@@ -399,14 +563,122 @@ export default function BookingDialog({
             />
           </div>
 
+          {room.requires_approval && (
+            <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 py-2">
+              <AlertCircle className="h-3 w-3 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <AlertDescription className="text-amber-800 dark:text-amber-200">
+                <div className="space-y-0.5 text-xs">
+                  <div>
+                    This room requires admin approval. Your request will be
+                    reviewed.
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-1">
+            <Label htmlFor="invitees" className="text-sm">
+              Invite people
+            </Label>
+            <Input
+              id="invitees"
+              placeholder="Search by name or email"
+              value={inviteSearch}
+              onChange={(e) => setInviteSearch(e.target.value)}
+              className="h-9"
+            />
+            {inviteSearchResults.length > 0 && (
+              <div className="border rounded-md divide-y">
+                {inviteSearchResults.map((p) => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => addInvitee(p)}
+                    className="w-full text-left px-3 py-2 hover:bg-accent"
+                  >
+                    <div className="text-sm font-medium">{p.full_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p.email}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedInvitees.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {selectedInvitees.map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-2 bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs"
+                  >
+                    {p.full_name}
+                    <button
+                      type="button"
+                      onClick={() => removeInvitee(p.id)}
+                      className="opacity-70 hover:opacity-100"
+                      aria-label={`Remove ${p.full_name}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-sm">Additional emails</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add email and press Enter/Add"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addExtraEmail();
+                  }
+                }}
+                className="h-9"
+              />
+              <Button type="button" variant="secondary" onClick={addExtraEmail}>
+                Add
+              </Button>
+            </div>
+            {extraEmails.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {extraEmails.map((em) => (
+                  <span
+                    key={em}
+                    className="inline-flex items-center gap-2 bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs"
+                  >
+                    {em}
+                    <button
+                      type="button"
+                      onClick={() => removeExtraEmail(em)}
+                      className="opacity-70 hover:opacity-100"
+                      aria-label={`Remove ${em}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <Label className="text-sm">Send email notifications</Label>
+            <Switch checked={sendEmails} onCheckedChange={setSendEmails} />
+          </div>
+
           {/* Booking Information Alert */}
           <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 py-2">
             <AlertCircle className="h-3 w-3 text-blue-600 dark:text-blue-400 mt-0.5" />
             <AlertDescription className="text-blue-800 dark:text-blue-200">
               <div className="space-y-0.5 text-xs">
-                <div>
-                  • 7:30 AM - 10:30 PM • Weekdays only • One booking per user
-                </div>
+                <div>• 7:30 AM - 10:30 PM • One booking per user</div>
               </div>
             </AlertDescription>
           </Alert>

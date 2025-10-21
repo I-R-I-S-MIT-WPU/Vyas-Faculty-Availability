@@ -23,7 +23,6 @@ import {
   isSameDay,
   parseISO,
   isWithinInterval,
-  isWeekend,
   isBefore,
   addHours,
   setHours,
@@ -217,10 +216,11 @@ export default function RoomCalendar({
         .select(
           `
           *,
-          profiles (full_name)
+          owner:profiles!bookings_teacher_id_fkey(full_name)
         `
         )
         .eq("room_id", selectedRoom.id)
+        .eq("status", "confirmed")
         .gte("start_time", weekStart.toISOString())
         .lte("start_time", weekEnd.toISOString());
 
@@ -269,10 +269,7 @@ export default function RoomCalendar({
       return true;
     }
 
-    // Disable if it's a weekend
-    if (isWeekend(day)) {
-      return true;
-    }
+    // Weekends are allowed
 
     return false;
   };
@@ -566,11 +563,7 @@ export default function RoomCalendar({
                 {weekDays.map((day) => (
                   <div
                     key={day.toISOString()}
-                    className={`p-2 sm:p-3 text-center font-semibold border-b rounded-lg ${
-                      isWeekend(day)
-                        ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400"
-                        : "bg-muted/50"
-                    }`}
+                    className={`p-2 sm:p-3 text-center font-semibold border-b rounded-lg bg-muted/50`}
                   >
                     <div className="font-bold text-xs sm:text-sm">
                       {format(day, "EEE")}
@@ -578,11 +571,7 @@ export default function RoomCalendar({
                     <div className="text-xs sm:text-sm text-muted-foreground">
                       {format(day, "MMM d")}
                     </div>
-                    {isWeekend(day) && (
-                      <div className="text-xs text-red-500 mt-1 hidden sm:block">
-                        Weekend
-                      </div>
-                    )}
+                    {/* Weekends allowed */}
                   </div>
                 ))}
               </div>
@@ -612,7 +601,7 @@ export default function RoomCalendar({
                   {weekDays.map((day) => {
                     const booking = getBookingForSlot(day, timeSlot.start);
                     const isDisabled = isSlotDisabled(day, timeSlot);
-                    const isWeekendDay = isWeekend(day);
+                    const isWeekendDay = false;
 
                     return (
                       <div
@@ -622,8 +611,6 @@ export default function RoomCalendar({
                             ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-200 dark:border-gray-700"
                             : booking
                             ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-not-allowed"
-                            : isWeekendDay
-                            ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 cursor-not-allowed"
                             : user
                             ? "bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-md"
                             : "bg-muted/50 cursor-not-allowed"
@@ -653,9 +640,7 @@ export default function RoomCalendar({
                           <div className="flex items-center justify-center h-full">
                             <div className="text-center text-muted-foreground">
                               <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mx-auto mb-0.5 sm:mb-1" />
-                              <div className="text-xs">
-                                {isWeekendDay ? "Weekend" : "Past"}
-                              </div>
+                              <div className="text-xs">{"Past"}</div>
                             </div>
                           </div>
                         ) : (

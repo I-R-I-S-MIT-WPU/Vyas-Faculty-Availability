@@ -66,7 +66,7 @@ export default function Header() {
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center space-x-2">
           <Calendar className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">Vyaas Room Booking</h1>
+          <h1 className="text-xl font-bold">Vyas Room Booking</h1>
         </Link>
 
         {/* Desktop Navigation */}
@@ -109,10 +109,7 @@ export default function Header() {
                     <span className="text-sm font-medium">{user.email}</span>
                     {isAdmin && (
                       <div className="flex items-center">
-                        <Shield
-                          className="h-4 w-4 text-blue-600"
-                          title="Admin User"
-                        />
+                        <Shield className="h-4 w-4 text-blue-600" />
                       </div>
                     )}
                   </div>
@@ -200,10 +197,7 @@ export default function Header() {
                 </span>
                 {isAdmin && (
                   <div className="flex items-center ml-2">
-                    <Shield
-                      className="h-4 w-4 text-blue-600"
-                      title="Admin User"
-                    />
+                    <Shield className="h-4 w-4 text-blue-600" />
                   </div>
                 )}
               </div>

@@ -51,7 +51,8 @@ const Dashboard = () => {
           `
           *,
           room:rooms(*),
-          profiles:profiles(full_name)
+          owner:profiles!bookings_teacher_id_fkey(full_name),
+          invitees:booking_invitees(invitee:profiles(full_name, email))
         `
         )
         .eq("teacher_id", user?.id)
