@@ -181,25 +181,30 @@ export default function BookingDetailsSidebar({
     startDate: Date,
     endDate: Date
   ): Promise<boolean> => {
-    if (!booking) return false;
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("id, start_time, end_time")
-      .eq("room_id", booking.room_id)
-      .eq("status", "confirmed")
-      .neq("id", booking.id);
-    if (error) {
-      console.error("Collision check failed", error);
+    if (!booking || !room) return false;
+    try {
+      // Use the effective timetable function to check availability
+      const { data, error } = await (supabase as any).rpc(
+        "check_slot_availability",
+        {
+          p_room_id: room.id,
+          p_start_time: startDate.toISOString(),
+          p_end_time: endDate.toISOString(),
+          p_exclude_booking_id: booking.id,
+        }
+      );
+
+      if (error) {
+        console.error("Collision check failed", error);
+        return false;
+      }
+
+      // Function returns true if available, false if not
+      return !data;
+    } catch (error) {
+      console.error("Error checking booking collision:", error);
       return false;
     }
-
-    return (
-      data?.some((existing) => {
-        const existingStart = parseISO(existing.start_time);
-        const existingEnd = parseISO(existing.end_time);
-        return startDate < existingEnd && endDate > existingStart;
-      }) || false
-    );
   };
 
   const checkUserConflict = async (

@@ -57,32 +57,27 @@ export default function BookingDialog({
   const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const { user } = useAuth();
 
-  // Function to check for booking collisions (only confirmed bookings block)
+  // Function to check for booking collisions using effective timetable
   const checkBookingCollision = async (
     startTime: Date,
     endTime: Date
   ): Promise<boolean> => {
     try {
-      // Get all bookings for this room
-      const { data, error } = await (supabase as any)
-        .from("bookings")
-        .select("*")
-        .eq("room_id", room.id)
-        .eq("status", "confirmed");
+      // Use the effective timetable function to check availability
+      const { data, error } = await (supabase as any).rpc(
+        "check_slot_availability",
+        {
+          p_room_id: room.id,
+          p_start_time: startTime.toISOString(),
+          p_end_time: endTime.toISOString(),
+          p_exclude_booking_id: null,
+        }
+      );
 
       if (error) throw error;
 
-      // Check for overlapping bookings manually
-      const hasConflict = data?.some((booking) => {
-        const bookingStart = new Date(booking.start_time);
-        const bookingEnd = new Date(booking.end_time);
-
-        // Check if the new booking overlaps with existing booking
-        // Overlap occurs when: new_start < existing_end AND new_end > existing_start
-        return startTime < bookingEnd && endTime > bookingStart;
-      });
-
-      return hasConflict || false;
+      // Function returns true if available, false if not
+      return !data;
     } catch (error) {
       console.error("Error checking booking collision:", error);
       return false; // If we can't check, allow the booking to proceed
