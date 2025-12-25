@@ -45,7 +45,14 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
+      const fullName = user?.user_metadata?.full_name?.trim();
+      const orFilters = [`teacher_id.eq.${user?.id}`];
+      if (fullName) {
+        const encodedName = encodeURIComponent(fullName);
+        orFilters.push(`template_teacher_name.ilike.${encodedName}`);
+      }
+
+      let query = supabase
         .from("bookings")
         .select(
           `
@@ -55,12 +62,22 @@ const Dashboard = () => {
           invitees:booking_invitees(invitee:profiles(full_name, email))
         `
         )
-        .eq("teacher_id", user?.id)
         .order("start_time", { ascending: true });
 
+      if (orFilters.length > 1) {
+        query = query.or(orFilters.join(","));
+      } else {
+        query = query.eq("teacher_id", user?.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
-      setBookings(data || []);
+      const uniqueBookings = Array.from(
+        new Map((data || []).map((booking) => [booking.id, booking])).values()
+      ) as Booking[];
+
+      setBookings(uniqueBookings);
     } catch (error) {
       console.error("Error fetching bookings:", error);
       toast({
@@ -73,12 +90,31 @@ const Dashboard = () => {
     }
   };
 
-  const cancelBooking = async (bookingId: string) => {
+  const cancelBooking = async (booking: Booking) => {
     try {
+      if (booking.template_id && booking.generated_for_week) {
+        const { error: exceptionError } = await (supabase as any)
+          .from("room_timetable_template_exceptions")
+          .upsert(
+            {
+              template_id: booking.template_id,
+              week_start_date: booking.generated_for_week,
+              resolved_booking_id: booking.id,
+              reason: "cancelled_by_teacher",
+              created_by: user?.id ?? null,
+            },
+            { onConflict: "template_id,week_start_date" }
+          );
+
+        if (exceptionError) {
+          console.warn("Failed to record template exception", exceptionError);
+        }
+      }
+
       const { error } = await supabase
         .from("bookings")
         .delete()
-        .eq("id", bookingId);
+        .eq("id", booking.id);
 
       if (error) throw error;
 
@@ -87,7 +123,6 @@ const Dashboard = () => {
         description: "Booking cancelled successfully",
       });
 
-      // Refresh bookings
       fetchUserBookings();
     } catch (error) {
       console.error("Error cancelling booking:", error);
@@ -243,6 +278,11 @@ const Dashboard = () => {
                             Class: {booking.class_division}
                           </Badge>
                         )}
+                        {booking.template_id && (
+                          <Badge variant="outline" className="mt-2">
+                            Timetable slot · {booking.template_teacher_name || "Scheduled"}
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex justify-end mt-4">
@@ -268,7 +308,7 @@ const Dashboard = () => {
                                 Keep Booking
                               </AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => cancelBooking(booking.id)}
+                                onClick={() => cancelBooking(booking)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Cancel Booking
@@ -351,6 +391,11 @@ const Dashboard = () => {
                         {booking.class_division && (
                           <Badge variant="secondary" className="mt-2">
                             Class: {booking.class_division}
+                          </Badge>
+                        )}
+                        {booking.template_id && (
+                          <Badge variant="outline" className="mt-2">
+                            Timetable slot · {booking.template_teacher_name || "Scheduled"}
                           </Badge>
                         )}
                       </div>

@@ -40,6 +40,7 @@ import {
   X,
 } from "lucide-react";
 import BookingDialog from "./BookingDialog";
+import BookingDetailsSidebar from "./BookingDetailsSidebar";
 import { toast } from "@/hooks/use-toast";
 import FreeRooms from "@/components/selectors/FreeRooms";
 
@@ -140,6 +141,8 @@ export default function RoomCalendar({
     date: Date;
     time: string;
   } | null>(null);
+  const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { user } = useAuth();
 
   // Simple discovery state when no room selected
@@ -166,13 +169,13 @@ export default function RoomCalendar({
     // Fetch buildings once for discovery view
     const fetchBuildings = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("buildings")
           .select("*")
           .eq("is_active", true)
           .order("name");
         if (error) throw error;
-        const list = data || [];
+        const list = (data || []) as Building[];
         setBuildings(list);
         // Default to Vyas if present
         const vyas = list.find((b) => b.name?.toLowerCase() === "vyas");
@@ -190,7 +193,7 @@ export default function RoomCalendar({
     const fetchFloors = async () => {
       if (!selectedBuildingId) return;
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("floors")
           .select(`*, rooms (*), building:buildings(*)`)
           .eq("building_id", selectedBuildingId)
@@ -206,17 +209,20 @@ export default function RoomCalendar({
     }
   }, [selectedBuildingId, selectedRoom]);
 
-  const fetchBookings = async () => {
-    if (!selectedRoom) return;
+  const fetchBookings = async (options: { silent?: boolean } = {}) => {
+    if (!selectedRoom) return [];
 
-    setLoading(true);
+    if (!options.silent) {
+      setLoading(true);
+    }
+
     try {
-      const { data: bookingsData, error } = await supabase
+      const { data: bookingsData, error } = await (supabase as any)
         .from("bookings")
         .select(
           `
           *,
-          owner:profiles!bookings_teacher_id_fkey(full_name)
+          profiles:profiles!bookings_teacher_id_fkey(full_name, email)
         `
         )
         .eq("room_id", selectedRoom.id)
@@ -225,7 +231,9 @@ export default function RoomCalendar({
         .lte("start_time", weekEnd.toISOString());
 
       if (error) throw error;
-      setBookings(bookingsData || []);
+      const list = (bookingsData || []) as Booking[];
+      setBookings(list);
+      return list;
     } catch (error) {
       console.error("Error fetching bookings:", error);
       toast({
@@ -233,8 +241,11 @@ export default function RoomCalendar({
         description: "Failed to load room bookings",
         variant: "destructive",
       });
+      return [];
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -302,6 +313,31 @@ export default function RoomCalendar({
     }
 
     setSelectedBooking({ room: selectedRoom, date: day, time: timeSlot });
+  };
+
+  const handleBookingClick = (booking: Booking) => {
+    setActiveBooking(booking);
+    setDetailsOpen(true);
+  };
+
+  const handleBookingUpdated = async (bookingId: string) => {
+    const refreshed = await fetchBookings({ silent: true });
+    const updatedBooking =
+      refreshed.find((item) => item.id === bookingId) || null;
+    if (updatedBooking) {
+      setActiveBooking(updatedBooking);
+    } else {
+      setActiveBooking(null);
+      setDetailsOpen(false);
+    }
+  };
+
+  const handleBookingDeleted = async (bookingId: string) => {
+    await fetchBookings({ silent: true });
+    if (activeBooking?.id === bookingId) {
+      setActiveBooking(null);
+      setDetailsOpen(false);
+    }
   };
 
   if (!selectedRoom) {
@@ -600,39 +636,52 @@ export default function RoomCalendar({
                   </div>
                   {weekDays.map((day) => {
                     const booking = getBookingForSlot(day, timeSlot.start);
-                    const isDisabled = isSlotDisabled(day, timeSlot);
+                    const slotInPast = isSlotDisabled(day, timeSlot);
+                    const isDisabled = !booking && slotInPast;
                     const isWeekendDay = false;
+                    const isUserBooking =
+                      booking && booking.teacher_id === user?.id;
 
                     return (
                       <div
                         key={`${timeSlot.start}-${day.toISOString()}`}
                         className={`p-2 sm:p-3 min-h-[60px] sm:min-h-[80px] rounded-lg border transition-all duration-200 ${
-                          isDisabled
+                          booking
+                            ? isUserBooking
+                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 cursor-pointer hover:shadow-md"
+                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md"
+                            : isDisabled
                             ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-200 dark:border-gray-700"
-                            : booking
-                            ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-not-allowed"
                             : user
                             ? "bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-md"
                             : "bg-muted/50 cursor-not-allowed"
                         }`}
-                        onClick={() =>
-                          !isDisabled &&
-                          !booking &&
-                          !isWeekendDay &&
-                          handleSlotClick(day, timeSlot.start)
-                        }
+                        onClick={() => {
+                          if (booking) {
+                            handleBookingClick(booking);
+                            return;
+                          }
+                          if (!isDisabled && !isWeekendDay) {
+                            handleSlotClick(day, timeSlot.start);
+                          }
+                        }}
                       >
                         {booking ? (
                           <div className="space-y-0.5 sm:space-y-1">
-                            <div className="font-semibold text-xs sm:text-sm leading-tight">
+                            <div className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2">
                               {booking.title}
                             </div>
                             <div className="text-xs opacity-90 hidden sm:block">
-                              {booking.profiles?.full_name}
+                              {booking.profiles?.full_name || "Reserved"}
                             </div>
                             {booking.class_division && (
                               <div className="text-xs opacity-75 hidden sm:block">
                                 {booking.class_division}
+                              </div>
+                            )}
+                            {isUserBooking && (
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                Manage
                               </div>
                             )}
                           </div>
@@ -695,9 +744,24 @@ export default function RoomCalendar({
           room={selectedBooking.room}
           date={selectedBooking.date}
           time={selectedBooking.time}
-          onBookingCreated={fetchBookings}
+          onBookingCreated={() => fetchBookings()}
         />
       )}
+
+      <BookingDetailsSidebar
+        booking={activeBooking}
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            setActiveBooking(null);
+          }
+        }}
+        room={selectedRoom}
+        currentUserId={user?.id}
+        onBookingUpdated={handleBookingUpdated}
+        onBookingDeleted={handleBookingDeleted}
+      />
     </div>
   );
 }
