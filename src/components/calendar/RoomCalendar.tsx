@@ -40,6 +40,8 @@ import {
   X,
 } from "lucide-react";
 import BookingDialog from "./BookingDialog";
+import BookingDetailsSidebar from "./BookingDetailsSidebar";
+import TemplateExceptionDialog from "./TemplateExceptionDialog";
 import { toast } from "@/hooks/use-toast";
 import FreeRooms from "@/components/selectors/FreeRooms";
 
@@ -133,6 +135,7 @@ export default function RoomCalendar({
   onRoomSelect,
 }: RoomCalendarProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [effectiveTimetable, setEffectiveTimetable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedBooking, setSelectedBooking] = useState<{
@@ -140,7 +143,18 @@ export default function RoomCalendar({
     date: Date;
     time: string;
   } | null>(null);
+  const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<{
+    id: string;
+    title: string;
+    weekStart: Date;
+  } | null>(null);
   const { user } = useAuth();
+  const [userProfile, setUserProfile] = useState<{ full_name: string } | null>(
+    null
+  );
 
   // Simple discovery state when no room selected
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -157,8 +171,24 @@ export default function RoomCalendar({
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   useEffect(() => {
+    if (user) {
+      const fetchUserProfile = async () => {
+        const { data } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        if (data) {
+          setUserProfile(data);
+        }
+      };
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (selectedRoom) {
-      fetchBookings();
+      fetchEffectiveTimetable();
     }
   }, [currentWeek, selectedRoom]);
 
@@ -166,13 +196,13 @@ export default function RoomCalendar({
     // Fetch buildings once for discovery view
     const fetchBuildings = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("buildings")
           .select("*")
           .eq("is_active", true)
           .order("name");
         if (error) throw error;
-        const list = data || [];
+        const list = (data || []) as Building[];
         setBuildings(list);
         // Default to Vyas if present
         const vyas = list.find((b) => b.name?.toLowerCase() === "vyas");
@@ -190,7 +220,7 @@ export default function RoomCalendar({
     const fetchFloors = async () => {
       if (!selectedBuildingId) return;
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("floors")
           .select(`*, rooms (*), building:buildings(*)`)
           .eq("building_id", selectedBuildingId)
@@ -206,17 +236,45 @@ export default function RoomCalendar({
     }
   }, [selectedBuildingId, selectedRoom]);
 
-  const fetchBookings = async () => {
-    if (!selectedRoom) return;
+  const fetchEffectiveTimetable = async (
+    options: { silent?: boolean } = {}
+  ) => {
+    if (!selectedRoom) return [];
 
-    setLoading(true);
+    if (!options.silent) {
+      setLoading(true);
+    }
+
     try {
-      const { data: bookingsData, error } = await supabase
+      // Calculate week start (Monday)
+      const weekStartDate = format(weekStart, "yyyy-MM-dd");
+
+      // Call the effective timetable function
+      const { data, error } = await (supabase as any).rpc(
+        "get_effective_timetable",
+        {
+          p_room_id: selectedRoom.id,
+          p_week_start: weekStartDate,
+        }
+      );
+
+      if (error) {
+        console.error("Effective timetable error:", error);
+        throw error;
+      }
+
+      const timetable = (data || []) as any[];
+      setEffectiveTimetable(timetable);
+
+      // Also fetch regular bookings for the sidebar/details view
+      const { data: bookingsData, error: bookingsError } = await (
+        supabase as any
+      )
         .from("bookings")
         .select(
           `
           *,
-          owner:profiles!bookings_teacher_id_fkey(full_name)
+          profiles:profiles!bookings_teacher_id_fkey(full_name, email)
         `
         )
         .eq("room_id", selectedRoom.id)
@@ -224,36 +282,71 @@ export default function RoomCalendar({
         .gte("start_time", weekStart.toISOString())
         .lte("start_time", weekEnd.toISOString());
 
-      if (error) throw error;
-      setBookings(bookingsData || []);
+      if (bookingsError) throw bookingsError;
+      const list = (bookingsData || []) as Booking[];
+      setBookings(list);
+
+      return timetable;
     } catch (error) {
-      console.error("Error fetching bookings:", error);
+      console.error("Error fetching effective timetable:", error);
       toast({
         title: "Error",
-        description: "Failed to load room bookings",
+        description: "Failed to load room timetable",
         variant: "destructive",
       });
+      return [];
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
   };
 
-  const getBookingForSlot = (day: Date, timeSlot: string) => {
-    return bookings.find((booking) => {
-      const bookingStart = parseISO(booking.start_time);
-      const bookingEnd = parseISO(booking.end_time);
-      const slotDate = new Date(day);
-      slotDate.setHours(
-        parseInt(timeSlot.split(":")[0]),
-        parseInt(timeSlot.split(":")[1])
-      );
+  // Keep fetchBookings for backward compatibility
+  const fetchBookings = fetchEffectiveTimetable;
 
-      return (
-        isSameDay(bookingStart, day) &&
-        bookingStart <= slotDate &&
-        bookingEnd > slotDate
-      );
+  const getSlotForTime = (day: Date, timeSlot: string) => {
+    // Create the time slot window (1 hour slot) in local time
+    const [hours, minutes] = timeSlot.split(":").map(Number);
+    const slotDate = new Date(day);
+    slotDate.setHours(hours, minutes, 0, 0);
+    const slotEnd = new Date(slotDate);
+    slotEnd.setHours(slotEnd.getHours() + 1);
+
+    // Find all slots that overlap with this time slot
+    const matchingSlots = effectiveTimetable.filter((slot) => {
+      // Parse the slot times - these come from the database as timestamps
+      const slotStart = parseISO(slot.start_time);
+      const slotEndTime = parseISO(slot.end_time);
+
+      // Get local time components for day comparison
+      const slotStartLocal = new Date(slotStart);
+      const dayLocal = new Date(day);
+
+      // Check if it's the same day (ignoring time)
+      const isSameDay =
+        slotStartLocal.getFullYear() === dayLocal.getFullYear() &&
+        slotStartLocal.getMonth() === dayLocal.getMonth() &&
+        slotStartLocal.getDate() === dayLocal.getDate();
+
+      if (!isSameDay) return false;
+
+      // Get the hour and minute of the slot's start time in local time
+      const slotStartHour = slotStartLocal.getHours();
+      const slotStartMinute = slotStartLocal.getMinutes();
+
+      // Check if the slot's start time matches this time slot exactly
+      // A slot matches if its start time (hour:minute) matches the timeSlot
+      const matchesTime =
+        slotStartHour === hours && slotStartMinute === minutes;
+
+      return matchesTime;
     });
+
+    // Return the first matching slot (prioritize bookings over templates if both exist)
+    return (
+      matchingSlots.find((s) => s.slot_type === "booking") || matchingSlots[0]
+    );
   };
 
   const isSlotDisabled = (
@@ -302,6 +395,31 @@ export default function RoomCalendar({
     }
 
     setSelectedBooking({ room: selectedRoom, date: day, time: timeSlot });
+  };
+
+  const handleBookingClick = (booking: Booking) => {
+    setActiveBooking(booking);
+    setDetailsOpen(true);
+  };
+
+  const handleBookingUpdated = async (bookingId: string) => {
+    const refreshed = await fetchBookings({ silent: true });
+    const updatedBooking =
+      refreshed.find((item) => item.id === bookingId) || null;
+    if (updatedBooking) {
+      setActiveBooking(updatedBooking);
+    } else {
+      setActiveBooking(null);
+      setDetailsOpen(false);
+    }
+  };
+
+  const handleBookingDeleted = async (bookingId: string) => {
+    await fetchBookings({ silent: true });
+    if (activeBooking?.id === bookingId) {
+      setActiveBooking(null);
+      setDetailsOpen(false);
+    }
   };
 
   if (!selectedRoom) {
@@ -599,40 +717,111 @@ export default function RoomCalendar({
                     )}
                   </div>
                   {weekDays.map((day) => {
-                    const booking = getBookingForSlot(day, timeSlot.start);
-                    const isDisabled = isSlotDisabled(day, timeSlot);
+                    const slot = getSlotForTime(day, timeSlot.start);
+                    const slotInPast = isSlotDisabled(day, timeSlot);
+                    const isDisabled = !slot && slotInPast;
                     const isWeekendDay = false;
+
+                    // Determine slot type and permissions
+                    const isTemplate = slot?.slot_type === "template";
+                    const isCancelled = slot?.is_cancelled === true;
+                    const isBooking = slot?.slot_type === "booking";
+                    const isUserSlot =
+                      (isBooking &&
+                        slot?.booking_id &&
+                        bookings.find((b) => b.id === slot.booking_id)
+                          ?.teacher_id === user?.id) ||
+                      (isTemplate &&
+                        slot?.teacher_name &&
+                        userProfile?.full_name &&
+                        slot.teacher_name.toLowerCase() ===
+                          userProfile.full_name.toLowerCase());
 
                     return (
                       <div
                         key={`${timeSlot.start}-${day.toISOString()}`}
                         className={`p-2 sm:p-3 min-h-[60px] sm:min-h-[80px] rounded-lg border transition-all duration-200 ${
-                          isDisabled
+                          isCancelled
+                            ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800 cursor-pointer hover:shadow-md border-dashed"
+                            : isTemplate
+                            ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 cursor-pointer hover:shadow-md"
+                            : isBooking
+                            ? isUserSlot
+                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 cursor-pointer hover:shadow-md"
+                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md"
+                            : isDisabled
                             ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-200 dark:border-gray-700"
-                            : booking
-                            ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-not-allowed"
                             : user
                             ? "bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-md"
                             : "bg-muted/50 cursor-not-allowed"
                         }`}
-                        onClick={() =>
-                          !isDisabled &&
-                          !booking &&
-                          !isWeekendDay &&
-                          handleSlotClick(day, timeSlot.start)
-                        }
+                        onClick={() => {
+                          if (slot && !isCancelled) {
+                            // If it's a booking, open booking details
+                            if (isBooking && slot.booking_id) {
+                              const booking = bookings.find(
+                                (b) => b.id === slot.booking_id
+                              );
+                              if (booking) {
+                                handleBookingClick(booking);
+                                return;
+                              }
+                            }
+                            // If it's a template and user is the teacher, allow cancellation
+                            if (isTemplate && isUserSlot && slot.template_id) {
+                              // Calculate week start (Monday) for the exception
+                              const weekStartForException = startOfWeek(day, {
+                                weekStartsOn: 1,
+                              });
+                              setSelectedTemplate({
+                                id: slot.template_id,
+                                title: slot.title || "",
+                                weekStart: weekStartForException,
+                              });
+                              setExceptionDialogOpen(true);
+                              return;
+                            }
+                            // Otherwise, just show info or do nothing
+                            return;
+                          }
+                          if (
+                            isCancelled ||
+                            (!slot && !isDisabled && !isWeekendDay)
+                          ) {
+                            handleSlotClick(day, timeSlot.start);
+                          }
+                        }}
                       >
-                        {booking ? (
+                        {isCancelled ? (
                           <div className="space-y-0.5 sm:space-y-1">
-                            <div className="font-semibold text-xs sm:text-sm leading-tight">
-                              {booking.title}
+                            <div className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2 text-yellow-600 dark:text-yellow-400">
+                              {slot?.title || "Cancelled"}
+                            </div>
+                            <div className="text-xs opacity-75 hidden sm:block">
+                              Free to book
+                            </div>
+                          </div>
+                        ) : slot ? (
+                          <div className="space-y-0.5 sm:space-y-1">
+                            <div className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2">
+                              {slot.title}
                             </div>
                             <div className="text-xs opacity-90 hidden sm:block">
-                              {booking.profiles?.full_name}
+                              {slot.teacher_name || "Reserved"}
                             </div>
-                            {booking.class_division && (
+                            {slot.class_division && (
                               <div className="text-xs opacity-75 hidden sm:block">
-                                {booking.class_division}
+                                {slot.class_division}
+                              </div>
+                            )}
+                            {isTemplate && (
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                                Template
+                              </div>
+                            )}
+                            {isUserSlot && (
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                Manage
                               </div>
                             )}
                           </div>
@@ -666,18 +855,22 @@ export default function RoomCalendar({
       {/* Legend */}
       <Card className="bg-muted/30">
         <CardContent className="pt-4 sm:pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
               <span>Available</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded"></div>
-              <span>Booked</span>
+              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded"></div>
+              <span>Template</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded"></div>
-              <span>Lunch Time</span>
+              <div className="w-4 h-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded border-dashed"></div>
+              <span>Cancelled</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded"></div>
+              <span>Booked</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"></div>
@@ -695,7 +888,40 @@ export default function RoomCalendar({
           room={selectedBooking.room}
           date={selectedBooking.date}
           time={selectedBooking.time}
-          onBookingCreated={fetchBookings}
+          onBookingCreated={() => fetchBookings()}
+        />
+      )}
+
+      <BookingDetailsSidebar
+        booking={activeBooking}
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            setActiveBooking(null);
+          }
+        }}
+        room={selectedRoom}
+        currentUserId={user?.id}
+        onBookingUpdated={handleBookingUpdated}
+        onBookingDeleted={handleBookingDeleted}
+      />
+
+      {selectedTemplate && (
+        <TemplateExceptionDialog
+          open={exceptionDialogOpen}
+          onOpenChange={(open) => {
+            setExceptionDialogOpen(open);
+            if (!open) {
+              setSelectedTemplate(null);
+            }
+          }}
+          templateId={selectedTemplate.id}
+          templateTitle={selectedTemplate.title}
+          weekStart={selectedTemplate.weekStart}
+          onExceptionCreated={() => {
+            fetchEffectiveTimetable({ silent: true });
+          }}
         />
       )}
     </div>

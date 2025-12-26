@@ -53,6 +53,9 @@ export interface Booking {
   panel: string | null;
   year_course: string | null;
   is_recurring: boolean;
+  template_id?: string | null;
+  template_teacher_name?: string | null;
+  generated_for_week?: string | null;
   status?: 'confirmed' | 'pending' | 'denied' | 'cancelled';
   approved_by?: string | null;
   approved_at?: string | null;
@@ -61,6 +64,7 @@ export interface Booking {
   room?: Room;
   profiles?: {
     full_name: string;
+    email?: string | null;
   };
 }
 
@@ -68,4 +72,32 @@ export interface BookingInvitee {
   booking_id: string;
   invitee_id: string;
   created_at: string;
+}
+
+export interface RoomTimetableTemplate {
+  id: string;
+  room_id: string;
+  teacher_name: string;
+  title: string;
+  weekday: number;
+  start_time: string;
+  duration_minutes: number;
+  notes: string | null;
+  repeat_interval_weeks: number;
+  effective_from: string;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoomTimetableTemplateException {
+  id: string;
+  template_id: string;
+  week_start_date: string;
+  resolved_booking_id: string | null;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }

@@ -164,10 +164,10 @@ const AdminDashboard = () => {
       const { error } = await supabase
         .from("bookings")
         .update({
-          status: "confirmed",
+          status: "confirmed" as any,
           approved_by: user?.id,
           approved_at: new Date().toISOString(),
-        })
+        } as any)
         .eq("id", bookingId);
       if (error) throw error;
       toast({
@@ -188,7 +188,7 @@ const AdminDashboard = () => {
     try {
       const { error } = await supabase
         .from("bookings")
-        .update({ status: "denied" })
+        .update({ status: "denied" as any } as any)
         .eq("id", bookingId);
       if (error) throw error;
       toast({ title: "Denied", description: "Booking request denied." });
@@ -224,11 +224,11 @@ const AdminDashboard = () => {
       .order("name", { ascending: true });
 
     if (error) throw error;
-    setRooms(data || []);
+    setRooms((data as any) || []);
   };
 
   const fetchAllFloors = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("floors")
       .select(
         `
@@ -239,29 +239,48 @@ const AdminDashboard = () => {
       .order("number", { ascending: true });
 
     if (error) throw error;
-    setFloors(data || []);
+    setFloors((data as any) || []);
   };
 
   const fetchAllBuildings = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("buildings")
       .select("*")
       .order("name", { ascending: true });
 
     if (error) throw error;
-    setBuildings(data || []);
+    setBuildings((data as any) || []);
   };
 
   const handleBuildingAdded = (building: Building) => {
     setBuildings((prev) => [...prev, building]);
   };
 
-  const deleteBooking = async (bookingId: string) => {
+  const deleteBooking = async (booking: Booking) => {
     try {
+      if (booking.template_id && booking.generated_for_week) {
+        const { error: exceptionError } = await (supabase as any)
+          .from("room_timetable_template_exceptions")
+          .upsert(
+            {
+              template_id: booking.template_id,
+              week_start_date: booking.generated_for_week,
+              resolved_booking_id: booking.id,
+              reason: "removed_by_admin",
+              created_by: user?.id ?? null,
+            },
+            { onConflict: "template_id,week_start_date" }
+          );
+
+        if (exceptionError) {
+          console.warn("Failed to record template exception", exceptionError);
+        }
+      }
+
       const { error } = await supabase
         .from("bookings")
         .delete()
-        .eq("id", bookingId);
+        .eq("id", booking.id);
 
       if (error) throw error;
 
@@ -395,7 +414,7 @@ const AdminDashboard = () => {
 
   const deleteBuilding = async (buildingId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("buildings")
         .delete()
         .eq("id", buildingId);
@@ -687,7 +706,7 @@ const AdminDashboard = () => {
                           <Badge variant={getBookingStatus(booking).variant}>
                             {getBookingStatus(booking).label}
                           </Badge>
-                          {booking.profiles?.is_admin && (
+                          {(booking.profiles as any)?.is_admin && (
                             <Badge variant="secondary">Admin</Badge>
                           )}
                         </div>
@@ -759,7 +778,7 @@ const AdminDashboard = () => {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteBooking(booking.id)}
+                                  onClick={() => deleteBooking(booking)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
                                   Delete
@@ -1332,12 +1351,15 @@ const AdminDashboard = () => {
         {/* Dialog Components */}
         <RoomManagementDialog
           open={roomDialog.open}
-          onOpenChange={(open) => setRoomDialog({ open })}
+          onOpenChange={(open) =>
+            setRoomDialog((prev) => ({ open, room: open ? prev.room : null }))
+          }
           room={roomDialog.room}
           onRoomSaved={() => {
             fetchAllRooms();
-            setRoomDialog({ open: false });
+            setRoomDialog({ open: false, room: null });
           }}
+          currentUserId={user?.id ?? null}
         />
 
         <FloorManagementDialog
@@ -1350,12 +1372,7 @@ const AdminDashboard = () => {
           }}
         />
 
-        <BuildingManagementDialog
-          open={buildingDialog.open}
-          onOpenChange={(open) => setBuildingDialog({ open })}
-          building={buildingDialog.building}
-          onBuildingSaved={handleBuildingAdded}
-        />
+        <BuildingManagementDialog onBuildingAdded={handleBuildingAdded} />
       </main>
     </div>
   );
