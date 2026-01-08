@@ -18,7 +18,11 @@ import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 
-export default function Header() {
+interface HeaderProps {
+  onVyasClick?: () => void;
+}
+
+export default function Header({ onVyasClick }: HeaderProps) {
   const { user, loading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -64,10 +68,20 @@ export default function Header() {
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center space-x-2">
-          <Calendar className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">Vyas Room Booking</h1>
-        </Link>
+        {onVyasClick ? (
+          <button
+            onClick={onVyasClick}
+            className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+          >
+            <Calendar className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">Vyas Room Booking</h1>
+          </button>
+        ) : (
+          <Link to="/" className="flex items-center space-x-2">
+            <Calendar className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">Vyas Room Booking</h1>
+          </Link>
+        )}
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">

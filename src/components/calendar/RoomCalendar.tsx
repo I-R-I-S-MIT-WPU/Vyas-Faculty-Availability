@@ -144,6 +144,10 @@ export default function RoomCalendar({
     time: string;
   } | null>(null);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [activeTemplate, setActiveTemplate] = useState<{
+    slot: any;
+    weekStart: Date;
+  } | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<{
@@ -165,6 +169,7 @@ export default function RoomCalendar({
   const [searchTerm, setSearchTerm] = useState("");
   const [roomType, setRoomType] = useState("");
   const [minCapacity, setMinCapacity] = useState("");
+  const [showCancelled, setShowCancelled] = useState(false);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
@@ -249,6 +254,63 @@ export default function RoomCalendar({
       // Calculate week start (Monday)
       const weekStartDate = format(weekStart, "yyyy-MM-dd");
 
+      // DEBUG: Fetch all templates directly from database to compare
+      const { data: allTemplates, error: templatesError } = await (supabase as any)
+        .from("room_timetable_templates")
+        .select("*")
+        .eq("room_id", selectedRoom.id)
+        .eq("is_active", true);
+
+      // DEBUG: Check for exceptions that might cancel templates
+      const { data: exceptions, error: exceptionsError } = await (supabase as any)
+        .from("room_timetable_template_exceptions")
+        .select("*")
+        .eq("week_start_date", weekStartDate);
+
+      if (!templatesError && allTemplates) {
+        console.log("🔍 ALL ACTIVE TEMPLATES IN DATABASE:", {
+          count: allTemplates.length,
+          templates: allTemplates.map((t: any) => {
+            // Calculate if this template should show this week
+            const templateWeekday = t.weekday;
+            const weekHasThisWeekday = weekDays.some((d) => {
+              const dWeekday = d.getDay() === 0 ? 6 : d.getDay() - 1;
+              return dWeekday === templateWeekday;
+            });
+            
+            // Check repeat interval
+            const weekDiff = Math.floor(
+              (weekStart.getTime() - new Date(t.effective_from).getTime()) / (7 * 24 * 60 * 60 * 1000)
+            );
+            const shouldShowByRepeat = t.repeat_interval_weeks === 1 || (weekDiff % t.repeat_interval_weeks) === 0;
+            
+            // Check if cancelled
+            const isCancelled = exceptions?.some((e: any) => e.template_id === t.id);
+            
+            return {
+              id: t.id,
+              title: t.title,
+              weekday: t.weekday,
+              start_time: t.start_time,
+              effective_from: t.effective_from,
+              repeat_interval_weeks: t.repeat_interval_weeks,
+              teacher: t.teacher_name,
+              shouldShow: weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
+              weekHasWeekday: weekHasThisWeekday,
+              shouldShowByRepeat,
+              isCancelled,
+              weekDiff,
+            };
+          }),
+          currentWeekStart: weekStartDate,
+          weekDays: weekDays.map((d) => ({
+            date: format(d, "yyyy-MM-dd"),
+            weekday: d.getDay() === 0 ? 6 : d.getDay() - 1, // Convert to 0-6 (Mon-Sun)
+          })),
+          exceptions: exceptions || [],
+        });
+      }
+
       // Call the effective timetable function
       const { data, error } = await (supabase as any).rpc(
         "get_effective_timetable",
@@ -264,6 +326,21 @@ export default function RoomCalendar({
       }
 
       const timetable = (data || []) as any[];
+      const templates = timetable.filter((s) => s.slot_type === "template");
+      console.log("✅ EFFECTIVE TIMETABLE FROM SQL FUNCTION:", {
+        count: timetable.length,
+        templateCount: templates.length,
+        templates: templates.map((t) => ({
+          id: t.template_id,
+          title: t.title,
+          start_time: t.start_time,
+          teacher: t.teacher_name,
+          weekday: new Date(t.start_time).getDay() === 0 ? 6 : new Date(t.start_time).getDay() - 1,
+        })),
+        bookings: timetable.filter((s) => s.slot_type === "booking").length,
+        cancelled: timetable.filter((s) => s.slot_type === "exception_cancelled").length,
+        weekStart: weekStartDate,
+      });
       setEffectiveTimetable(timetable);
 
       // Also fetch regular bookings for the sidebar/details view
@@ -331,22 +408,25 @@ export default function RoomCalendar({
 
       if (!isSameDay) return false;
 
-      // Get the hour and minute of the slot's start time in local time
-      const slotStartHour = slotStartLocal.getHours();
-      const slotStartMinute = slotStartLocal.getMinutes();
+      // Check if the slot overlaps with this time slot
+      // A slot matches if it starts within this time slot OR overlaps with it
+      // slotStart < slotEnd (the 1-hour calendar slot) AND slotEndTime > slotDate
+      const overlaps =
+        slotStart < slotEnd && slotEndTime > slotDate;
 
-      // Check if the slot's start time matches this time slot exactly
-      // A slot matches if its start time (hour:minute) matches the timeSlot
-      const matchesTime =
-        slotStartHour === hours && slotStartMinute === minutes;
-
-      return matchesTime;
+      return overlaps;
     });
 
     // Return the first matching slot (prioritize bookings over templates if both exist)
-    return (
-      matchingSlots.find((s) => s.slot_type === "booking") || matchingSlots[0]
-    );
+    // If multiple slots overlap, prefer the one that starts closest to the slot start time
+    const sortedSlots = matchingSlots.sort((a, b) => {
+      const aStart = parseISO(a.start_time).getTime();
+      const bStart = parseISO(b.start_time).getTime();
+      const slotStartTime = slotDate.getTime();
+      return Math.abs(aStart - slotStartTime) - Math.abs(bStart - slotStartTime);
+    });
+    
+    return sortedSlots.find((s) => s.slot_type === "booking") || sortedSlots[0];
   };
 
   const isSlotDisabled = (
@@ -611,9 +691,9 @@ export default function RoomCalendar({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 h-full flex flex-col">
       {/* Week Navigation */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 pt-4">
         <div className="flex items-center space-x-2 sm:space-x-4">
           <Button
             variant="outline"
@@ -646,8 +726,8 @@ export default function RoomCalendar({
       </div>
 
       {/* Room Info */}
-      <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-        <CardHeader className="pb-3">
+      <Card className="shadow-lg border-0 bg-transparent w-full h-full flex flex-col">
+        <CardHeader className="pb-3 flex-shrink-0 px-4 pt-4 bg-transparent">
           <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <span className="text-lg sm:text-xl font-bold">
               {selectedRoom.name}
@@ -670,183 +750,283 @@ export default function RoomCalendar({
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-2 sm:px-6">
-          <div className="overflow-x-auto -mx-2 sm:mx-0">
-            <div className="min-w-[800px] sm:min-w-[900px]">
-              {/* Header with days */}
-              <div className="grid grid-cols-8 gap-1 sm:gap-2 mb-3 sm:mb-4">
-                <div className="p-2 sm:p-3 font-semibold text-center bg-muted/50 rounded-lg text-xs sm:text-sm">
-                  Time
-                </div>
-                {weekDays.map((day) => (
-                  <div
-                    key={day.toISOString()}
-                    className={`p-2 sm:p-3 text-center font-semibold border-b rounded-lg bg-muted/50`}
-                  >
-                    <div className="font-bold text-xs sm:text-sm">
-                      {format(day, "EEE")}
+        <CardContent className="px-0 w-full flex-1 flex flex-col min-h-0 bg-transparent">
+          {/* Show Cancelled Toggle Button */}
+          <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0 bg-transparent">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCancelled(!showCancelled)}
+                className="text-xs"
+              >
+                {showCancelled ? "Hide" : "Show"} Cancelled Classes
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            {/* Continuous Timeline View - Google Calendar Style */}
+            <div className="flex border-t border-l" style={{ minHeight: "1088px" }}>
+              {/* Time column */}
+              <div className="w-20 sm:w-24 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30">
+                <div className="h-12 border-b bg-muted/50 sticky top-0"></div>
+                {/* Time markers from 7:00 to 23:00 */}
+                {Array.from({ length: 17 }, (_, i) => {
+                  const hour = 7 + i;
+                  const isLunchHour = hour === 12;
+                  return (
+                    <div
+                      key={hour}
+                      className={`h-16 border-b border-dashed border-muted-foreground/20 relative ${
+                        isLunchHour ? "bg-orange-50/30 dark:bg-orange-950/10" : ""
+                      }`}
+                    >
+                      <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
+                        {hour <= 12 ? `${hour === 0 ? 12 : hour}:00` : `${hour - 12}:00`}
+                        {hour >= 12 ? " PM" : hour === 0 ? " AM" : " AM"}
+                      </div>
                     </div>
-                    <div className="text-xs sm:text-sm text-muted-foreground">
-                      {format(day, "MMM d")}
-                    </div>
-                    {/* Weekends allowed */}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Time slot rows */}
-              {timeSlots.map((timeSlot) => (
-                <div
-                  key={timeSlot.start}
-                  className="grid grid-cols-8 gap-1 sm:gap-2 mb-1 sm:mb-2"
-                >
-                  <div
-                    className={`p-2 sm:p-3 text-center font-medium border-r rounded-lg ${
-                      isLunchTime(timeSlot)
-                        ? "bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400"
-                        : "bg-muted/30"
-                    }`}
-                  >
-                    <div className="font-semibold text-xs sm:text-sm">
-                      {timeSlot.display}
-                    </div>
-                    {isLunchTime(timeSlot) && (
-                      <div className="text-xs text-orange-500 mt-1 hidden sm:block">
-                        Lunch
-                      </div>
-                    )}
-                  </div>
-                  {weekDays.map((day) => {
-                    const slot = getSlotForTime(day, timeSlot.start);
-                    const slotInPast = isSlotDisabled(day, timeSlot);
-                    const isDisabled = !slot && slotInPast;
-                    const isWeekendDay = false;
+              {/* Days columns */}
+              <div className="flex-1 flex">
+                {weekDays.map((day) => {
+                  // Get all events for this day (filter out cancelled if not showing)
+                  const dayEvents = effectiveTimetable.filter((slot) => {
+                    const slotStart = parseISO(slot.start_time);
+                    const isSameDay =
+                      slotStart.getFullYear() === day.getFullYear() &&
+                      slotStart.getMonth() === day.getMonth() &&
+                      slotStart.getDate() === day.getDate();
+                    
+                    // Filter out cancelled slots if not showing them
+                    if (!showCancelled && slot.is_cancelled) {
+                      return false;
+                    }
+                    
+                    return isSameDay;
+                  });
+
+                  // Calculate positions for overlapping events
+                  const eventsWithPositions = dayEvents.map((slot, index) => {
+                    const slotStart = parseISO(slot.start_time);
+                    const slotEnd = parseISO(slot.end_time);
+                    
+                    // Calculate position from top (7:00 AM = 0)
+                    const startHour = slotStart.getHours();
+                    const startMinute = slotStart.getMinutes();
+                    const startPosition = (startHour - 7) * 64 + (startMinute / 60) * 64;
+                    
+                    // Calculate height based on duration
+                    const durationMinutes = (slotEnd.getTime() - slotStart.getTime()) / (1000 * 60);
+                    const height = (durationMinutes / 60) * 64;
+
+                    // Check if this event overlaps with others
+                    const overlappingEvents = dayEvents.filter((otherSlot) => {
+                      if (otherSlot.slot_id === slot.slot_id) return false;
+                      const otherStart = parseISO(otherSlot.start_time);
+                      const otherEnd = parseISO(otherSlot.end_time);
+                      // Check if events overlap
+                      return slotStart < otherEnd && slotEnd > otherStart;
+                    });
+                    
+                    // Find position in overlapping group
+                    const allOverlapping = [slot, ...overlappingEvents].sort((a, b) => {
+                      const aStart = parseISO(a.start_time).getTime();
+                      const bStart = parseISO(b.start_time).getTime();
+                      return aStart - bStart;
+                    });
+                    const overlapIndex = allOverlapping.findIndex(e => e.slot_id === slot.slot_id);
+                    const overlapCount = allOverlapping.length;
+                    const widthPercent = overlapCount > 1 ? 100 / overlapCount : 100;
+                    const leftOffset = overlapCount > 1 ? (overlapIndex * widthPercent) : 0;
+
+                    // Check if slot is in the past
+                    const now = new Date();
+                    const isPast = slotEnd < now;
+
+                    // Check if it's lunch time (12:30-1:30)
+                    const isLunchTime = (startHour === 12 && startMinute === 30) || (startHour === 13 && startMinute === 30);
 
                     // Determine slot type and permissions
-                    const isTemplate = slot?.slot_type === "template";
-                    const isCancelled = slot?.is_cancelled === true;
-                    const isBooking = slot?.slot_type === "booking";
+                    const isTemplate = slot.slot_type === "template";
+                    const isCancelled = slot.is_cancelled === true;
+                    const isBooking = slot.slot_type === "booking";
                     const isUserSlot =
                       (isBooking &&
-                        slot?.booking_id &&
+                        slot.booking_id &&
                         bookings.find((b) => b.id === slot.booking_id)
                           ?.teacher_id === user?.id) ||
                       (isTemplate &&
-                        slot?.teacher_name &&
+                        slot.teacher_name &&
                         userProfile?.full_name &&
                         slot.teacher_name.toLowerCase() ===
                           userProfile.full_name.toLowerCase());
 
-                    return (
-                      <div
-                        key={`${timeSlot.start}-${day.toISOString()}`}
-                        className={`p-2 sm:p-3 min-h-[60px] sm:min-h-[80px] rounded-lg border transition-all duration-200 ${
-                          isCancelled
-                            ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800 cursor-pointer hover:shadow-md border-dashed"
-                            : isTemplate
-                            ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 cursor-pointer hover:shadow-md"
-                            : isBooking
-                            ? isUserSlot
-                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 cursor-pointer hover:shadow-md"
-                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md"
-                            : isDisabled
-                            ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-200 dark:border-gray-700"
-                            : user
-                            ? "bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-md"
-                            : "bg-muted/50 cursor-not-allowed"
-                        }`}
-                        onClick={() => {
-                          if (slot && !isCancelled) {
-                            // If it's a booking, open booking details
-                            if (isBooking && slot.booking_id) {
-                              const booking = bookings.find(
-                                (b) => b.id === slot.booking_id
-                              );
-                              if (booking) {
-                                handleBookingClick(booking);
+                    return {
+                      ...slot,
+                      startPosition,
+                      height,
+                      isTemplate,
+                      isCancelled,
+                      isBooking,
+                      isUserSlot,
+                      isPast,
+                      isLunchTime,
+                      widthPercent,
+                      leftOffset,
+                    };
+                  });
+
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className="flex-1 border-r relative"
+                      style={{ minWidth: "calc((100% - 96px) / 7)" }}
+                    >
+                      {/* Day header */}
+                      <div className="h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20 backdrop-blur-sm">
+                        <div className="font-bold text-xs sm:text-sm">
+                          {format(day, "EEE")}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(day, "MMM d")}
+                        </div>
+                      </div>
+
+                      {/* Day timeline container */}
+                      <div className="relative" style={{ height: "1088px" }}>
+                        {/* Hour lines */}
+                        {Array.from({ length: 17 }, (_, i) => (
+                          <div
+                            key={i}
+                            className="absolute left-0 right-0 border-b border-dashed border-muted-foreground/10"
+                            style={{ top: `${i * 64}px` }}
+                          />
+                        ))}
+
+                        {/* Events */}
+                        {eventsWithPositions.map((event) => (
+                          <div
+                            key={`${event.slot_id}-${event.start_time}`}
+                            className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
+                              event.isCancelled
+                                ? showCancelled
+                                  ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                  : "hidden"
+                                : event.isPast
+                                ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
+                                : event.isLunchTime
+                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                : event.isTemplate
+                                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                : event.isBooking
+                                ? event.isUserSlot
+                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
+                                  : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                : "bg-gray-100 dark:bg-gray-800"
+                            }`}
+                            style={{
+                              top: `${event.startPosition}px`,
+                              height: `${Math.max(event.height, 56)}px`,
+                              minHeight: "56px",
+                              left: event.leftOffset > 0 ? `${event.leftOffset}%` : "4px",
+                              right: event.leftOffset > 0 ? `${100 - event.leftOffset - event.widthPercent}%` : "4px",
+                              width: event.leftOffset > 0 ? `${event.widthPercent - 0.5}%` : "calc(100% - 8px)",
+                            }}
+                            onClick={() => {
+                              if (event.isCancelled) {
+                                handleSlotClick(day, format(parseISO(event.start_time), "HH:mm"));
                                 return;
                               }
-                            }
-                            // If it's a template and user is the teacher, allow cancellation
-                            if (isTemplate && isUserSlot && slot.template_id) {
-                              // Calculate week start (Monday) for the exception
-                              const weekStartForException = startOfWeek(day, {
-                                weekStartsOn: 1,
-                              });
-                              setSelectedTemplate({
-                                id: slot.template_id,
-                                title: slot.title || "",
-                                weekStart: weekStartForException,
-                              });
-                              setExceptionDialogOpen(true);
-                              return;
-                            }
-                            // Otherwise, just show info or do nothing
-                            return;
-                          }
-                          if (
-                            isCancelled ||
-                            (!slot && !isDisabled && !isWeekendDay)
-                          ) {
-                            handleSlotClick(day, timeSlot.start);
-                          }
-                        }}
-                      >
-                        {isCancelled ? (
-                          <div className="space-y-0.5 sm:space-y-1">
-                            <div className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2 text-yellow-600 dark:text-yellow-400">
-                              {slot?.title || "Cancelled"}
-                            </div>
-                            <div className="text-xs opacity-75 hidden sm:block">
-                              Free to book
+                              if (event.isBooking && event.booking_id) {
+                                const booking = bookings.find(
+                                  (b) => b.id === event.booking_id
+                                );
+                                if (booking) {
+                                  handleBookingClick(booking);
+                                  return;
+                                }
+                              }
+                              // Open sidebar for templates (both user and non-user)
+                              if (event.isTemplate) {
+                                const weekStartForException = startOfWeek(day, {
+                                  weekStartsOn: 1,
+                                });
+                                setActiveTemplate({
+                                  slot: event,
+                                  weekStart: weekStartForException,
+                                });
+                                setDetailsOpen(true);
+                                return;
+                              }
+                            }}
+                          >
+                            <div className="h-full flex flex-col overflow-hidden gap-0.5">
+                              <div className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate" title={event.title}>
+                                {event.title}
+                              </div>
+                              <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
+                                {format(parseISO(event.start_time), "h:mm a")} - {format(parseISO(event.end_time), "h:mm a")}
+                              </div>
+                              {event.teacher_name && (
+                                <div className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate" title={event.teacher_name}>
+                                  {event.teacher_name}
+                                </div>
+                              )}
+                              {event.isTemplate && (
+                                <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
+                                  Template
+                                </div>
+                              )}
+                              {event.isUserSlot && !event.isTemplate && (
+                                <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
+                                  Manage
+                                </div>
+                              )}
                             </div>
                           </div>
-                        ) : slot ? (
-                          <div className="space-y-0.5 sm:space-y-1">
-                            <div className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2">
-                              {slot.title}
-                            </div>
-                            <div className="text-xs opacity-90 hidden sm:block">
-                              {slot.teacher_name || "Reserved"}
-                            </div>
-                            {slot.class_division && (
-                              <div className="text-xs opacity-75 hidden sm:block">
-                                {slot.class_division}
-                              </div>
-                            )}
-                            {isTemplate && (
-                              <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">
-                                Template
-                              </div>
-                            )}
-                            {isUserSlot && (
-                              <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                                Manage
-                              </div>
-                            )}
-                          </div>
-                        ) : isDisabled ? (
-                          <div className="flex items-center justify-center h-full">
-                            <div className="text-center text-muted-foreground">
-                              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mx-auto mb-0.5 sm:mb-1" />
-                              <div className="text-xs">{"Past"}</div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            {user && (
-                              <div className="text-center text-muted-foreground">
-                                <Plus className="h-3 w-3 sm:h-4 sm:w-4 mx-auto mb-0.5 sm:mb-1" />
-                                <div className="text-xs">Book</div>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        ))}
+
+                        {/* Clickable empty slots and hour markers */}
+                        {Array.from({ length: 17 }, (_, i) => {
+                          const hour = 7 + i;
+                          const slotTime = new Date(day);
+                          slotTime.setHours(hour, 0, 0, 0);
+                          const slotInPast = isBefore(slotTime, new Date());
+                          // Lunch time is 12:30-1:30, highlight the 12:00-1:00 and 1:00-2:00 slots
+                          const isLunchHour = hour === 12 || hour === 13;
+                          
+                          return (
+                            <div
+                              key={hour}
+                              className={`absolute left-0 right-0 transition-colors ${
+                                slotInPast
+                                  ? "bg-gray-100/30 dark:bg-gray-800/30 cursor-not-allowed"
+                                  : isLunchHour
+                                  ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
+                                  : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
+                              }`}
+                              style={{
+                                top: `${i * 64}px`,
+                                height: "64px",
+                              }}
+                              onClick={() => {
+                                if (!slotInPast && user) {
+                                  handleSlotClick(day, `${hour.toString().padStart(2, "0")}:00`);
+                                }
+                              }}
+                            />
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -894,17 +1074,26 @@ export default function RoomCalendar({
 
       <BookingDetailsSidebar
         booking={activeBooking}
+        template={activeTemplate?.slot}
+        templateWeekStart={activeTemplate?.weekStart}
         open={detailsOpen}
         onOpenChange={(open) => {
           setDetailsOpen(open);
           if (!open) {
             setActiveBooking(null);
+            setActiveTemplate(null);
           }
         }}
         room={selectedRoom}
         currentUserId={user?.id}
+        userProfile={userProfile}
         onBookingUpdated={handleBookingUpdated}
         onBookingDeleted={handleBookingDeleted}
+        onTemplateCancelled={() => {
+          fetchEffectiveTimetable();
+          setActiveTemplate(null);
+          setDetailsOpen(false);
+        }}
       />
 
       {selectedTemplate && (

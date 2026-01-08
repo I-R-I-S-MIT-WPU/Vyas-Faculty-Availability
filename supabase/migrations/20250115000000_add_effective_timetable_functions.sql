@@ -61,7 +61,12 @@ BEGIN
             AND (EXTRACT(ISODOW FROM wd.day) - 1) = t.weekday
             AND (
                 t.repeat_interval_weeks = 1 
-                OR MOD((wd.day - t.effective_from)::INTEGER / 7, t.repeat_interval_weeks) = 0
+                OR MOD(
+                    -- Calculate week number difference: normalize both dates to Monday, then calculate weeks
+                    -- DATE_TRUNC('week', date) returns the Monday of that week
+                    ((DATE_TRUNC('week', wd.day)::date - DATE_TRUNC('week', t.effective_from)::date) / 7),
+                    t.repeat_interval_weeks
+                ) = 0
             )
     ),
     -- Get exceptions (cancellations) for this week
