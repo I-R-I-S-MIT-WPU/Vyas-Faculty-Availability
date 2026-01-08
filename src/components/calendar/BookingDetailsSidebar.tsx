@@ -37,17 +37,22 @@ import {
   Trash2,
   User,
   X,
+  XCircle,
 } from "lucide-react";
 import { differenceInMinutes, format, isBefore, parseISO } from "date-fns";
 
 interface BookingDetailsSidebarProps {
   booking: Booking | null;
+  template?: any | null;
+  templateWeekStart?: Date | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentUserId?: string;
+  userProfile?: { full_name: string } | null;
   room: Room | null;
   onBookingUpdated?: (bookingId: string) => void | Promise<void>;
   onBookingDeleted?: (bookingId: string) => void | Promise<void>;
+  onTemplateCancelled?: () => void | Promise<void>;
 }
 
 interface BookingFormState {
@@ -89,16 +94,21 @@ const statusColors: Record<string, string> = {
 
 export default function BookingDetailsSidebar({
   booking,
+  template,
+  templateWeekStart,
   open,
   onOpenChange,
   currentUserId,
+  userProfile,
   room,
   onBookingUpdated,
   onBookingDeleted,
+  onTemplateCancelled,
 }: BookingDetailsSidebarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancellingTemplate, setIsCancellingTemplate] = useState(false);
   const [formState, setFormState] = useState<BookingFormState>({
     title: "",
     start: "",
@@ -110,6 +120,8 @@ export default function BookingDetailsSidebar({
   });
 
   const isOwner = booking && booking.teacher_id === currentUserId;
+  const isTemplateOwner = template && userProfile && template.teacher_name && 
+    template.teacher_name.toLowerCase() === userProfile.full_name.toLowerCase();
 
   useEffect(() => {
     if (booking) {
@@ -363,6 +375,41 @@ export default function BookingDetailsSidebar({
     onOpenChange(nextOpen);
   };
 
+  const handleCancelTemplate = async () => {
+    if (!template || !templateWeekStart || !isTemplateOwner) return;
+    
+    setIsCancellingTemplate(true);
+    try {
+      const weekStartDate = format(templateWeekStart, "yyyy-MM-dd");
+      const { error } = await (supabase as any).rpc(
+        "create_template_exception",
+        {
+          p_template_id: template.template_id,
+          p_week_start_date: weekStartDate,
+          p_reason: "Cancelled by teacher",
+        }
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "Class cancelled",
+        description: "This class has been cancelled for this week.",
+      });
+      
+      await onTemplateCancelled?.();
+    } catch (err: any) {
+      console.error("Failed to cancel template", err);
+      toast({
+        title: "Cancel failed",
+        description: err.message || "Could not cancel this class.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancellingTemplate(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
@@ -373,7 +420,7 @@ export default function BookingDetailsSidebar({
           <SheetHeader className="px-6 pt-6">
             <div className="flex items-start justify-between gap-3">
               <SheetTitle className="text-left text-xl">
-                {booking ? "Booking Details" : "Event Details"}
+                {booking ? "Booking Details" : template ? "Template Details" : "Event Details"}
               </SheetTitle>
               <SheetClose asChild className="rounded-full">
                 <Button
@@ -390,10 +437,94 @@ export default function BookingDetailsSidebar({
           <Separator className="mt-4" />
           <div className="flex-1 min-h-0 px-6 py-4">
             <ScrollArea className="h-full pr-2">
-              {!booking ? (
+              {!booking && !template ? (
                 <p className="text-sm text-muted-foreground">
                   Select an event from the timetable to view its details.
                 </p>
+              ) : template ? (
+                <div className="space-y-6 pb-10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">
+                        {room?.name}
+                      </p>
+                      <h3 className="text-lg font-semibold leading-tight">
+                        {template.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Template class by {template.teacher_name || "Unknown"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300"
+                    >
+                      Template
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-2 rounded-lg border bg-muted/20 p-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span>
+                        {format(parseISO(template.start_time), "EEEE, MMM d, yyyy")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span>
+                        {format(parseISO(template.start_time), "h:mm a")} – {format(
+                          parseISO(template.end_time),
+                          "h:mm a"
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <span>{room?.name || "Room"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span>{template.teacher_name || "Unknown"}</span>
+                    </div>
+                  </div>
+
+                  {template.description && (
+                    <div>
+                      <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+                        Description
+                      </p>
+                      <p className="rounded-md border bg-background p-3 text-sm leading-relaxed">
+                        {template.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {isTemplateOwner && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleCancelTemplate}
+                        disabled={isCancellingTemplate}
+                        className="gap-1"
+                      >
+                        {isCancellingTemplate ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                        Cancel this class for this week
+                      </Button>
+                    </div>
+                  )}
+
+                  {!isTemplateOwner && (
+                    <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+                      Only {template.teacher_name} can cancel this template class.
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-6 pb-10">
                   <div className="flex items-start justify-between gap-3">

@@ -9,14 +9,14 @@ const Index = () => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="container mx-auto py-6 space-y-8">
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header onVyasClick={() => setSelectedRoom(null)} />
+      <main className="flex-1 flex flex-col overflow-hidden">
         {selectedRoom ? (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="flex flex-1 overflow-hidden gap-4 px-4 py-4">
             {/* Left Sidebar - Room Selector */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-6">
+            <div className="w-80 flex-shrink-0 border-r bg-background overflow-y-auto rounded-lg">
+              <div className="p-4 sticky top-0">
                 <RoomSelector
                   selectedRoom={selectedRoom}
                   onRoomSelect={setSelectedRoom}
@@ -28,7 +28,7 @@ const Index = () => {
             </div>
 
             {/* Right Side - Calendar */}
-            <div className="lg:col-span-3">
+            <div className="flex-1 overflow-hidden">
               <RoomCalendar
                 selectedRoom={selectedRoom}
                 onRoomSelect={setSelectedRoom}
@@ -36,7 +36,7 @@ const Index = () => {
             </div>
           </div>
         ) : (
-          <div>
+          <div className="flex-1 overflow-hidden px-4 py-4">
             {/* Full-width discovery/calendar when no room selected */}
             <RoomCalendar
               selectedRoom={selectedRoom}
