@@ -249,6 +249,63 @@ export default function RoomCalendar({
       // Calculate week start (Monday)
       const weekStartDate = format(weekStart, "yyyy-MM-dd");
 
+      // DEBUG: Fetch all templates directly from database to compare
+      const { data: allTemplates, error: templatesError } = await (supabase as any)
+        .from("room_timetable_templates")
+        .select("*")
+        .eq("room_id", selectedRoom.id)
+        .eq("is_active", true);
+
+      // DEBUG: Check for exceptions that might cancel templates
+      const { data: exceptions, error: exceptionsError } = await (supabase as any)
+        .from("room_timetable_template_exceptions")
+        .select("*")
+        .eq("week_start_date", weekStartDate);
+
+      if (!templatesError && allTemplates) {
+        console.log("🔍 ALL ACTIVE TEMPLATES IN DATABASE:", {
+          count: allTemplates.length,
+          templates: allTemplates.map((t: any) => {
+            // Calculate if this template should show this week
+            const templateWeekday = t.weekday;
+            const weekHasThisWeekday = weekDays.some((d) => {
+              const dWeekday = d.getDay() === 0 ? 6 : d.getDay() - 1;
+              return dWeekday === templateWeekday;
+            });
+            
+            // Check repeat interval
+            const weekDiff = Math.floor(
+              (weekStart.getTime() - new Date(t.effective_from).getTime()) / (7 * 24 * 60 * 60 * 1000)
+            );
+            const shouldShowByRepeat = t.repeat_interval_weeks === 1 || (weekDiff % t.repeat_interval_weeks) === 0;
+            
+            // Check if cancelled
+            const isCancelled = exceptions?.some((e: any) => e.template_id === t.id);
+            
+            return {
+              id: t.id,
+              title: t.title,
+              weekday: t.weekday,
+              start_time: t.start_time,
+              effective_from: t.effective_from,
+              repeat_interval_weeks: t.repeat_interval_weeks,
+              teacher: t.teacher_name,
+              shouldShow: weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
+              weekHasWeekday: weekHasThisWeekday,
+              shouldShowByRepeat,
+              isCancelled,
+              weekDiff,
+            };
+          }),
+          currentWeekStart: weekStartDate,
+          weekDays: weekDays.map((d) => ({
+            date: format(d, "yyyy-MM-dd"),
+            weekday: d.getDay() === 0 ? 6 : d.getDay() - 1, // Convert to 0-6 (Mon-Sun)
+          })),
+          exceptions: exceptions || [],
+        });
+      }
+
       // Call the effective timetable function
       const { data, error } = await (supabase as any).rpc(
         "get_effective_timetable",
@@ -264,6 +321,21 @@ export default function RoomCalendar({
       }
 
       const timetable = (data || []) as any[];
+      const templates = timetable.filter((s) => s.slot_type === "template");
+      console.log("✅ EFFECTIVE TIMETABLE FROM SQL FUNCTION:", {
+        count: timetable.length,
+        templateCount: templates.length,
+        templates: templates.map((t) => ({
+          id: t.template_id,
+          title: t.title,
+          start_time: t.start_time,
+          teacher: t.teacher_name,
+          weekday: new Date(t.start_time).getDay() === 0 ? 6 : new Date(t.start_time).getDay() - 1,
+        })),
+        bookings: timetable.filter((s) => s.slot_type === "booking").length,
+        cancelled: timetable.filter((s) => s.slot_type === "exception_cancelled").length,
+        weekStart: weekStartDate,
+      });
       setEffectiveTimetable(timetable);
 
       // Also fetch regular bookings for the sidebar/details view
@@ -331,22 +403,25 @@ export default function RoomCalendar({
 
       if (!isSameDay) return false;
 
-      // Get the hour and minute of the slot's start time in local time
-      const slotStartHour = slotStartLocal.getHours();
-      const slotStartMinute = slotStartLocal.getMinutes();
+      // Check if the slot overlaps with this time slot
+      // A slot matches if it starts within this time slot OR overlaps with it
+      // slotStart < slotEnd (the 1-hour calendar slot) AND slotEndTime > slotDate
+      const overlaps =
+        slotStart < slotEnd && slotEndTime > slotDate;
 
-      // Check if the slot's start time matches this time slot exactly
-      // A slot matches if its start time (hour:minute) matches the timeSlot
-      const matchesTime =
-        slotStartHour === hours && slotStartMinute === minutes;
-
-      return matchesTime;
+      return overlaps;
     });
 
     // Return the first matching slot (prioritize bookings over templates if both exist)
-    return (
-      matchingSlots.find((s) => s.slot_type === "booking") || matchingSlots[0]
-    );
+    // If multiple slots overlap, prefer the one that starts closest to the slot start time
+    const sortedSlots = matchingSlots.sort((a, b) => {
+      const aStart = parseISO(a.start_time).getTime();
+      const bStart = parseISO(b.start_time).getTime();
+      const slotStartTime = slotDate.getTime();
+      return Math.abs(aStart - slotStartTime) - Math.abs(bStart - slotStartTime);
+    });
+    
+    return sortedSlots.find((s) => s.slot_type === "booking") || sortedSlots[0];
   };
 
   const isSlotDisabled = (
