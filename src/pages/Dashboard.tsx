@@ -45,37 +45,67 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
-      const fullName = user?.user_metadata?.full_name?.trim();
-      const orFilters = [`teacher_id.eq.${user?.id}`];
-      if (fullName) {
-        const encodedName = encodeURIComponent(fullName);
-        orFilters.push(`template_teacher_name.ilike.${encodedName}`);
+      if (!user?.id) {
+        setBookings([]);
+        return;
       }
 
-      let query = supabase
+      // First, get the user's full name from profiles
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+      
+      const fullName = profile?.full_name?.trim() || null;
+
+      // Fetch bookings where user is the teacher
+      const { data: teacherBookings, error: teacherError } = await supabase
         .from("bookings")
         .select(
           `
           *,
           room:rooms(*),
-          owner:profiles!bookings_teacher_id_fkey(full_name),
-          invitees:booking_invitees(invitee:profiles(full_name, email))
+          owner:profiles!bookings_teacher_id_fkey(full_name)
         `
         )
+        .eq("teacher_id", user.id)
         .order("start_time", { ascending: true });
 
-      if (orFilters.length > 1) {
-        query = query.or(orFilters.join(","));
+      if (teacherError) throw teacherError;
+
+      // Fetch bookings where template_teacher_name matches (if we have a full name)
+      let templateBookings: any[] = [];
+      if (fullName) {
+        const { data: templateData, error: templateError } = await supabase
+          .from("bookings")
+          .select(
+            `
+            *,
+            room:rooms(*),
+            owner:profiles!bookings_teacher_id_fkey(full_name)
+          `
+          )
+          .ilike("template_teacher_name", `%${fullName}%`)
+          .order("start_time", { ascending: true });
+
+        if (templateError) {
+          console.warn("Error fetching template bookings:", templateError);
       } else {
-        query = query.eq("teacher_id", user?.id);
+          templateBookings = templateData || [];
+        }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-
+      // Combine and deduplicate bookings
+      const allBookings = [...(teacherBookings || []), ...templateBookings];
       const uniqueBookings = Array.from(
-        new Map((data || []).map((booking) => [booking.id, booking])).values()
+        new Map(allBookings.map((booking) => [booking.id, booking])).values()
       ) as Booking[];
+
+      // Sort by start_time
+      uniqueBookings.sort((a, b) => 
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      );
 
       setBookings(uniqueBookings);
     } catch (error) {
@@ -189,7 +219,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto py-6 space-y-6">
+      <main className="container mx-auto py-6 px-4 sm:px-6 space-y-6">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight">Your Bookings</h1>
           <p className="text-muted-foreground mt-2">
