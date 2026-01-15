@@ -13,7 +13,8 @@ import { Calendar } from "lucide-react";
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -27,45 +28,55 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     const { error } = await signIn(email, password);
-    
+
     if (error) {
       toast({
         title: "Error",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "Signed in successfully"
+        description: "Signed in successfully",
       });
       navigate("/");
     }
-    
+
     setLoading(false);
+  };
+
+  const TITLE_REGEX = /^(dr|prof|mr|mrs|ms)(\.|\s)+/i;
+
+  const cleanFirstName = (name: string) => {
+    return name.replace(TITLE_REGEX, "").trim();
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
+    const cleanedFirstName = cleanFirstName(firstName);
+    const fullName = `${cleanedFirstName} ${lastName.trim()}`.trim();
+
     const { error } = await signUp(email, password, fullName);
-    
+
     if (error) {
       toast({
-        title: "Error", 
+        title: "Error",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "Account created successfully! Please check your email for verification."
+        description:
+          "Account created successfully! Please check your email for verification.",
       });
     }
-    
+
     setLoading(false);
   };
 
@@ -79,13 +90,15 @@ export default function Auth() {
           <CardTitle className="text-2xl">Vyaas Room Booking</CardTitle>
           <p className="text-muted-foreground">MIT WPU Teacher Portal</p>
         </CardHeader>
+
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
+            {/* ---------- SIGN IN ---------- */}
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -99,6 +112,7 @@ export default function Auth() {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="signin-password">Password</Label>
                   <Input
@@ -109,25 +123,42 @@ export default function Auth() {
                     required
                   />
                 </div>
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
             </TabsContent>
-            
+
+            {/* ---------- SIGN UP ---------- */}
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    placeholder="Dr. John Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first-name">First Name</Label>
+                    <Input
+                      id="first-name"
+                      type="text"
+                      placeholder="John"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="last-name">Last Name</Label>
+                    <Input
+                      id="last-name"
+                      type="text"
+                      placeholder="Doe"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
@@ -139,6 +170,7 @@ export default function Auth() {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
                   <Input
@@ -149,6 +181,7 @@ export default function Auth() {
                     required
                   />
                 </div>
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating Account..." : "Create Account"}
                 </Button>
@@ -160,3 +193,6 @@ export default function Auth() {
     </div>
   );
 }
+
+                                               
+ 
