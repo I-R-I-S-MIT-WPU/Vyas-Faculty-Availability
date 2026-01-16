@@ -13,7 +13,7 @@ const Index = () => {
       <Header onVyasClick={() => setSelectedRoom(null)} />
       <main className="flex-1 flex flex-col overflow-hidden">
         {selectedRoom ? (
-          <div className="flex flex-1 overflow-hidden gap-4 px-4 py-4">
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden gap-4 px-4 py-4">
             {/* Left Sidebar - Room Selector */}
             <div className="w-80 flex-shrink-0 border-r bg-background overflow-y-auto rounded-lg">
               <div className="p-4 sticky top-0">
