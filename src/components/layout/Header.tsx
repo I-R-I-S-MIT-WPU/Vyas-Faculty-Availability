@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\layout\Header.tsx
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,7 +149,7 @@ export default function Header({ onVyasClick }: HeaderProps) {
         {/* Mobile Menu Button */}
         <div className="md:hidden flex items-center space-x-2">
           <ThemeToggle />
-          {user && (
+          {user ? (
             <Button
               variant="ghost"
               size="sm"
@@ -160,6 +161,13 @@ export default function Header({ onVyasClick }: HeaderProps) {
                 <Menu className="h-5 w-5" />
               )}
             </Button>
+          ):(
+            <Link to="/auth">
+                  <Button variant="default" size="sm">
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Sign In
+                  </Button>
+                </Link>
           )}
         </div>
       </div>
@@ -167,12 +175,12 @@ export default function Header({ onVyasClick }: HeaderProps) {
       {/* Mobile Navigation */}
       {mobileMenuOpen && user && (
         <div className="md:hidden border-t bg-background/95 backdrop-blur">
-          <div className="container py-4 space-y-3">
-            <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+          <div className="container py-4 space-y-4">
+            <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="block">
               <Button
                 variant="default"
                 size="sm"
-                className="w-full justify-start"
+                className="w-full justify-start h-10"
               >
                 <LayoutDashboard className="h-4 w-4 mr-2" />
                 My Bookings
@@ -180,11 +188,11 @@ export default function Header({ onVyasClick }: HeaderProps) {
             </Link>
 
             {isAdmin && (
-              <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
+              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="block">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/20"
+                  className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/20 h-10"
                 >
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Dashboard
@@ -192,11 +200,11 @@ export default function Header({ onVyasClick }: HeaderProps) {
               </Link>
             )}
 
-            <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
+            <Link to="/settings" onClick={() => setMobileMenuOpen(false)} className="block">
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start"
+                className="w-full justify-start h-10"
               >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
