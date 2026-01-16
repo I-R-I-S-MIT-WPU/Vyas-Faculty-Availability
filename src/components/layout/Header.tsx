@@ -77,10 +77,10 @@ export default function Header({ onVyasClick }: HeaderProps) {
             <h1 className="text-xl font-bold">Vyas Room Booking</h1>
           </button>
         ) : (
-          <Link to="/" className="flex items-center space-x-2">
-            <Calendar className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Vyas Room Booking</h1>
-          </Link>
+        <Link to="/" className="flex items-center space-x-2">
+          <Calendar className="h-6 w-6 text-primary" />
+          <h1 className="text-xl font-bold">Vyas Room Booking</h1>
+        </Link>
         )}
 
         {/* Desktop Navigation */}

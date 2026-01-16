@@ -247,7 +247,7 @@ export default function RoomCalendar({
     if (!selectedRoom) return [];
 
     if (!options.silent) {
-      setLoading(true);
+    setLoading(true);
     }
 
     try {
@@ -374,8 +374,8 @@ export default function RoomCalendar({
       return [];
     } finally {
       if (!options.silent) {
-        setLoading(false);
-      }
+      setLoading(false);
+    }
     }
   };
 
@@ -385,7 +385,7 @@ export default function RoomCalendar({
   const getSlotForTime = (day: Date, timeSlot: string) => {
     // Create the time slot window (1 hour slot) in local time
     const [hours, minutes] = timeSlot.split(":").map(Number);
-    const slotDate = new Date(day);
+      const slotDate = new Date(day);
     slotDate.setHours(hours, minutes, 0, 0);
     const slotEnd = new Date(slotDate);
     slotEnd.setHours(slotEnd.getHours() + 1);
@@ -762,9 +762,9 @@ export default function RoomCalendar({
               >
                 {showCancelled ? "Hide" : "Show"} Cancelled Classes
               </Button>
-            </div>
-          </div>
-          
+                    </div>
+              </div>
+
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {/* Continuous Timeline View - Google Calendar Style */}
             <div className="flex border-t border-l" style={{ minHeight: "1088px" }}>
@@ -780,20 +780,20 @@ export default function RoomCalendar({
                       key={hour}
                       className={`h-16 border-b border-dashed border-muted-foreground/20 relative ${
                         isLunchHour ? "bg-orange-50/30 dark:bg-orange-950/10" : ""
-                      }`}
-                    >
+                    }`}
+                  >
                       <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
                         {hour <= 12 ? `${hour === 0 ? 12 : hour}:00` : `${hour - 12}:00`}
                         {hour >= 12 ? " PM" : hour === 0 ? " AM" : " AM"}
-                      </div>
                     </div>
+                      </div>
                   );
                 })}
-              </div>
+                  </div>
 
               {/* Days columns */}
               <div className="flex-1 flex">
-                {weekDays.map((day) => {
+                  {weekDays.map((day) => {
                   // Get all events for this day (filter out cancelled if not showing)
                   const dayEvents = effectiveTimetable.filter((slot) => {
                     const slotStart = parseISO(slot.start_time);
@@ -810,8 +810,55 @@ export default function RoomCalendar({
                     return isSameDay;
                   });
 
+                  // Group overlapping events together (transitive closure)
+                  const eventGroups: typeof dayEvents[] = [];
+                  const processed = new Set<string>();
+                  
+                  dayEvents.forEach((slot) => {
+                    if (processed.has(slot.slot_id)) return;
+                    
+                    const slotStart = parseISO(slot.start_time);
+                    const slotEnd = parseISO(slot.end_time);
+                    const group: typeof dayEvents = [slot];
+                    processed.add(slot.slot_id);
+                    
+                    // Find all events that overlap with any event in this group
+                    let foundNew = true;
+                    while (foundNew) {
+                      foundNew = false;
+                      dayEvents.forEach((otherSlot) => {
+                        if (processed.has(otherSlot.slot_id)) return;
+                        
+                        const otherStart = parseISO(otherSlot.start_time);
+                        const otherEnd = parseISO(otherSlot.end_time);
+                        
+                        // Check if this event overlaps with any event in the current group
+                        const overlaps = group.some((groupSlot) => {
+                          const groupStart = parseISO(groupSlot.start_time);
+                          const groupEnd = parseISO(groupSlot.end_time);
+                          return otherStart < groupEnd && otherEnd > groupStart;
+                        });
+                        
+                        if (overlaps) {
+                          group.push(otherSlot);
+                          processed.add(otherSlot.slot_id);
+                          foundNew = true;
+                        }
+                      });
+                    }
+                    
+                    // Sort group by start time
+                    group.sort((a, b) => {
+                      const aStart = parseISO(a.start_time).getTime();
+                      const bStart = parseISO(b.start_time).getTime();
+                      return aStart - bStart;
+                    });
+                    
+                    eventGroups.push(group);
+                  });
+
                   // Calculate positions for overlapping events
-                  const eventsWithPositions = dayEvents.map((slot, index) => {
+                  const eventsWithPositions = dayEvents.map((slot) => {
                     const slotStart = parseISO(slot.start_time);
                     const slotEnd = parseISO(slot.end_time);
                     
@@ -824,25 +871,17 @@ export default function RoomCalendar({
                     const durationMinutes = (slotEnd.getTime() - slotStart.getTime()) / (1000 * 60);
                     const height = (durationMinutes / 60) * 64;
 
-                    // Check if this event overlaps with others
-                    const overlappingEvents = dayEvents.filter((otherSlot) => {
-                      if (otherSlot.slot_id === slot.slot_id) return false;
-                      const otherStart = parseISO(otherSlot.start_time);
-                      const otherEnd = parseISO(otherSlot.end_time);
-                      // Check if events overlap
-                      return slotStart < otherEnd && slotEnd > otherStart;
-                    });
+                    // Find which group this slot belongs to
+                    const group = eventGroups.find((g) => 
+                      g.some((e) => e.slot_id === slot.slot_id)
+                    ) || [slot];
                     
-                    // Find position in overlapping group
-                    const allOverlapping = [slot, ...overlappingEvents].sort((a, b) => {
-                      const aStart = parseISO(a.start_time).getTime();
-                      const bStart = parseISO(b.start_time).getTime();
-                      return aStart - bStart;
-                    });
-                    const overlapIndex = allOverlapping.findIndex(e => e.slot_id === slot.slot_id);
-                    const overlapCount = allOverlapping.length;
+                    const overlapIndex = group.findIndex(e => e.slot_id === slot.slot_id);
+                    const overlapCount = group.length;
+                    
+                    // Calculate width and position for side-by-side display
                     const widthPercent = overlapCount > 1 ? 100 / overlapCount : 100;
-                    const leftOffset = overlapCount > 1 ? (overlapIndex * widthPercent) : 0;
+                    const leftPercent = overlapCount > 1 ? (overlapIndex * widthPercent) : 0;
 
                     // Check if slot is in the past
                     const now = new Date();
@@ -877,12 +916,12 @@ export default function RoomCalendar({
                       isPast,
                       isLunchTime,
                       widthPercent,
-                      leftOffset,
+                      leftPercent,
                     };
                   });
 
-                  return (
-                    <div
+                    return (
+                      <div
                       key={day.toISOString()}
                       className="flex-1 border-r relative"
                       style={{ minWidth: "calc((100% - 96px) / 7)" }}
@@ -933,9 +972,10 @@ export default function RoomCalendar({
                               top: `${event.startPosition}px`,
                               height: `${Math.max(event.height, 56)}px`,
                               minHeight: "56px",
-                              left: event.leftOffset > 0 ? `${event.leftOffset}%` : "4px",
-                              right: event.leftOffset > 0 ? `${100 - event.leftOffset - event.widthPercent}%` : "4px",
-                              width: event.leftOffset > 0 ? `${event.widthPercent - 0.5}%` : "calc(100% - 8px)",
+                              left: `${event.leftPercent}%`,
+                              width: `${event.widthPercent}%`,
+                              marginLeft: event.leftPercent === 0 ? "4px" : "0",
+                              marginRight: event.leftPercent + event.widthPercent >= 100 ? "4px" : "2px",
                             }}
                             onClick={() => {
                               if (event.isCancelled) {
@@ -968,27 +1008,27 @@ export default function RoomCalendar({
                             <div className="h-full flex flex-col overflow-hidden gap-0.5">
                               <div className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate" title={event.title}>
                                 {event.title}
-                              </div>
+                            </div>
                               <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
                                 {format(parseISO(event.start_time), "h:mm a")} - {format(parseISO(event.end_time), "h:mm a")}
-                              </div>
+                            </div>
                               {event.teacher_name && (
                                 <div className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate" title={event.teacher_name}>
                                   {event.teacher_name}
-                                </div>
-                              )}
+                              </div>
+                            )}
                               {event.isTemplate && (
                                 <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
                                   Template
-                                </div>
+                          </div>
                               )}
                               {event.isUserSlot && !event.isTemplate && (
                                 <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
                                   Manage
-                                </div>
-                              )}
                             </div>
+                              )}
                           </div>
+                              </div>
                         ))}
 
                         {/* Clickable empty slots and hour markers */}
@@ -1022,11 +1062,11 @@ export default function RoomCalendar({
                             />
                           );
                         })}
+                          </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
             </div>
           </div>
         </CardContent>
