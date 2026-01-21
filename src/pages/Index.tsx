@@ -13,22 +13,34 @@ const Index = () => {
       <Header onVyasClick={() => setSelectedRoom(null)} />
       <main className="flex-1 flex flex-col overflow-hidden">
         {selectedRoom ? (
-          <div className="flex flex-1 overflow-hidden gap-4 px-4 py-4">
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden gap-4 px-4 py-4">
             {/* Left Sidebar - Room Selector */}
-            <div className="w-80 flex-shrink-0 border-r bg-background overflow-y-auto rounded-lg">
-              <div className="p-4 sticky top-0">
-                <RoomSelector
-                  selectedRoom={selectedRoom}
-                  onRoomSelect={setSelectedRoom}
-                />
-                <div className="mt-6">
-                  <FreeRooms onRoomSelect={setSelectedRoom} />
-                </div>
+            <div
+            className="
+              order-2 md:order-1
+              w-full md:w-80
+              mx-auto md:mx-0
+              flex-shrink-0
+              border md:border-r
+              bg-background
+              overflow-y-auto
+              rounded-lg
+            "
+          >
+            <div className="p-4 md:sticky md:top-0 flex flex-col items-center md:items-stretch">
+              <RoomSelector
+                selectedRoom={selectedRoom}
+                onRoomSelect={setSelectedRoom}
+              />
+              <div className="mt-6 w-full">
+                <FreeRooms onRoomSelect={setSelectedRoom} />
               </div>
             </div>
+          </div>
+
 
             {/* Right Side - Calendar */}
-            <div className="flex-1 overflow-hidden">
+            <div className="order-1 md:order-2 flex-1 overflow-hidden">
               <RoomCalendar
                 selectedRoom={selectedRoom}
                 onRoomSelect={setSelectedRoom}

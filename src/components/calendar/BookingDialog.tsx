@@ -60,7 +60,7 @@ export default function BookingDialog({
   // Function to check for booking collisions using effective timetable
   const checkBookingCollision = async (
     startTime: Date,
-    endTime: Date
+    endTime: Date,
   ): Promise<boolean> => {
     try {
       // Use the effective timetable function to check availability
@@ -71,7 +71,7 @@ export default function BookingDialog({
           p_start_time: startTime.toISOString(),
           p_end_time: endTime.toISOString(),
           p_exclude_booking_id: null,
-        }
+        },
       );
 
       if (error) throw error;
@@ -87,7 +87,7 @@ export default function BookingDialog({
   // Function to check for user booking conflicts (confirmed only)
   const checkUserBookingConflict = async (
     startTime: Date,
-    endTime: Date
+    endTime: Date,
   ): Promise<boolean> => {
     if (!user) return false;
 
@@ -186,7 +186,7 @@ export default function BookingDialog({
       // Check for user booking conflict
       const hasUserConflict = await checkUserBookingConflict(
         startTime,
-        endTime
+        endTime,
       );
       if (hasUserConflict) {
         toast({
@@ -289,7 +289,7 @@ export default function BookingDialog({
             hour12: true,
           });
           const duration = Math.round(
-            (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60)
+            (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60),
           ); // hours
 
           // Get all email addresses
@@ -407,7 +407,7 @@ export default function BookingDialog({
         // Exclude current user and already selected
         const selectedIds = new Set(selectedInvitees.map((s) => s.id));
         const filtered = (data || []).filter(
-          (p) => p.id !== user?.id && !selectedIds.has(p.id)
+          (p) => p.id !== user?.id && !selectedIds.has(p.id),
         ) as Profile[];
         setInviteSearchResults(filtered);
       }
@@ -452,7 +452,7 @@ export default function BookingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] scale-[0.95] sm:scale-100 sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-lg">
         <DialogHeader className="pb-3">
           <DialogTitle className="flex items-center space-x-2 text-lg">
             <MapPin className="h-5 w-5" />
@@ -670,12 +670,15 @@ export default function BookingDialog({
 
           {/* Booking Information Alert */}
           <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 py-2">
-            <AlertCircle className="h-3 w-3 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <AlertDescription className="text-blue-800 dark:text-blue-200">
-              <div className="space-y-0.5 text-xs">
-                <div>• 7:30 AM - 10:30 PM • One booking per user</div>
-              </div>
-            </AlertDescription>
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-[2px]" />
+
+              <AlertDescription className="text-blue-800 dark:text-blue-200">
+                <div className="text-xs leading-relaxed">
+                  • 7:30 AM – 10:30 PM • One booking per user
+                </div>
+              </AlertDescription>
+            </div>
           </Alert>
 
           <div className="flex justify-end space-x-2 pt-4">

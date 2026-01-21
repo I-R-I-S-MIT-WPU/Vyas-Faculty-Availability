@@ -157,7 +157,7 @@ export default function RoomCalendar({
   } | null>(null);
   const { user } = useAuth();
   const [userProfile, setUserProfile] = useState<{ full_name: string } | null>(
-    null
+    null,
   );
 
   // Simple discovery state when no room selected
@@ -242,12 +242,12 @@ export default function RoomCalendar({
   }, [selectedBuildingId, selectedRoom]);
 
   const fetchEffectiveTimetable = async (
-    options: { silent?: boolean } = {}
+    options: { silent?: boolean } = {},
   ) => {
     if (!selectedRoom) return [];
 
     if (!options.silent) {
-    setLoading(true);
+      setLoading(true);
     }
 
     try {
@@ -255,14 +255,18 @@ export default function RoomCalendar({
       const weekStartDate = format(weekStart, "yyyy-MM-dd");
 
       // DEBUG: Fetch all templates directly from database to compare
-      const { data: allTemplates, error: templatesError } = await (supabase as any)
+      const { data: allTemplates, error: templatesError } = await (
+        supabase as any
+      )
         .from("room_timetable_templates")
         .select("*")
         .eq("room_id", selectedRoom.id)
         .eq("is_active", true);
 
       // DEBUG: Check for exceptions that might cancel templates
-      const { data: exceptions, error: exceptionsError } = await (supabase as any)
+      const { data: exceptions, error: exceptionsError } = await (
+        supabase as any
+      )
         .from("room_timetable_template_exceptions")
         .select("*")
         .eq("week_start_date", weekStartDate);
@@ -277,16 +281,21 @@ export default function RoomCalendar({
               const dWeekday = d.getDay() === 0 ? 6 : d.getDay() - 1;
               return dWeekday === templateWeekday;
             });
-            
+
             // Check repeat interval
             const weekDiff = Math.floor(
-              (weekStart.getTime() - new Date(t.effective_from).getTime()) / (7 * 24 * 60 * 60 * 1000)
+              (weekStart.getTime() - new Date(t.effective_from).getTime()) /
+                (7 * 24 * 60 * 60 * 1000),
             );
-            const shouldShowByRepeat = t.repeat_interval_weeks === 1 || (weekDiff % t.repeat_interval_weeks) === 0;
-            
+            const shouldShowByRepeat =
+              t.repeat_interval_weeks === 1 ||
+              weekDiff % t.repeat_interval_weeks === 0;
+
             // Check if cancelled
-            const isCancelled = exceptions?.some((e: any) => e.template_id === t.id);
-            
+            const isCancelled = exceptions?.some(
+              (e: any) => e.template_id === t.id,
+            );
+
             return {
               id: t.id,
               title: t.title,
@@ -295,7 +304,8 @@ export default function RoomCalendar({
               effective_from: t.effective_from,
               repeat_interval_weeks: t.repeat_interval_weeks,
               teacher: t.teacher_name,
-              shouldShow: weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
+              shouldShow:
+                weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
               weekHasWeekday: weekHasThisWeekday,
               shouldShowByRepeat,
               isCancelled,
@@ -317,7 +327,7 @@ export default function RoomCalendar({
         {
           p_room_id: selectedRoom.id,
           p_week_start: weekStartDate,
-        }
+        },
       );
 
       if (error) {
@@ -335,10 +345,15 @@ export default function RoomCalendar({
           title: t.title,
           start_time: t.start_time,
           teacher: t.teacher_name,
-          weekday: new Date(t.start_time).getDay() === 0 ? 6 : new Date(t.start_time).getDay() - 1,
+          weekday:
+            new Date(t.start_time).getDay() === 0
+              ? 6
+              : new Date(t.start_time).getDay() - 1,
         })),
         bookings: timetable.filter((s) => s.slot_type === "booking").length,
-        cancelled: timetable.filter((s) => s.slot_type === "exception_cancelled").length,
+        cancelled: timetable.filter(
+          (s) => s.slot_type === "exception_cancelled",
+        ).length,
         weekStart: weekStartDate,
       });
       setEffectiveTimetable(timetable);
@@ -352,7 +367,7 @@ export default function RoomCalendar({
           `
           *,
           profiles:profiles!bookings_teacher_id_fkey(full_name, email)
-        `
+        `,
         )
         .eq("room_id", selectedRoom.id)
         .eq("status", "confirmed")
@@ -374,8 +389,8 @@ export default function RoomCalendar({
       return [];
     } finally {
       if (!options.silent) {
-      setLoading(false);
-    }
+        setLoading(false);
+      }
     }
   };
 
@@ -385,7 +400,7 @@ export default function RoomCalendar({
   const getSlotForTime = (day: Date, timeSlot: string) => {
     // Create the time slot window (1 hour slot) in local time
     const [hours, minutes] = timeSlot.split(":").map(Number);
-      const slotDate = new Date(day);
+    const slotDate = new Date(day);
     slotDate.setHours(hours, minutes, 0, 0);
     const slotEnd = new Date(slotDate);
     slotEnd.setHours(slotEnd.getHours() + 1);
@@ -411,8 +426,7 @@ export default function RoomCalendar({
       // Check if the slot overlaps with this time slot
       // A slot matches if it starts within this time slot OR overlaps with it
       // slotStart < slotEnd (the 1-hour calendar slot) AND slotEndTime > slotDate
-      const overlaps =
-        slotStart < slotEnd && slotEndTime > slotDate;
+      const overlaps = slotStart < slotEnd && slotEndTime > slotDate;
 
       return overlaps;
     });
@@ -423,15 +437,17 @@ export default function RoomCalendar({
       const aStart = parseISO(a.start_time).getTime();
       const bStart = parseISO(b.start_time).getTime();
       const slotStartTime = slotDate.getTime();
-      return Math.abs(aStart - slotStartTime) - Math.abs(bStart - slotStartTime);
+      return (
+        Math.abs(aStart - slotStartTime) - Math.abs(bStart - slotStartTime)
+      );
     });
-    
+
     return sortedSlots.find((s) => s.slot_type === "booking") || sortedSlots[0];
   };
 
   const isSlotDisabled = (
     day: Date,
-    timeSlot: { hour: number; minute: number }
+    timeSlot: { hour: number; minute: number },
   ) => {
     const now = new Date();
     const slotTime = new Date(day);
@@ -505,7 +521,7 @@ export default function RoomCalendar({
   if (!selectedRoom) {
     // Filter and flatten rooms
     const allRooms = floors.flatMap((f) =>
-      f.rooms.map((r) => ({ room: r, floor: f }))
+      f.rooms.map((r) => ({ room: r, floor: f })),
     );
     const filteredRooms = allRooms.filter(({ room }) => {
       const matchesSearch = searchTerm
@@ -620,7 +636,7 @@ export default function RoomCalendar({
                       map.set(floorName, [] as typeof filteredRooms);
                     map.get(floorName)!.push(item);
                     return map;
-                  }, new Map<string, typeof filteredRooms>())
+                  }, new Map<string, typeof filteredRooms>()),
                 ).map(([floorName, roomsOnFloor]) => (
                   <div key={floorName}>
                     <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
@@ -762,12 +778,15 @@ export default function RoomCalendar({
               >
                 {showCancelled ? "Hide" : "Show"} Cancelled Classes
               </Button>
-                    </div>
-              </div>
+            </div>
+          </div>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 overflow-y-auto">
             {/* Continuous Timeline View - Google Calendar Style */}
-            <div className="flex border-t border-l" style={{ minHeight: "1088px" }}>
+            <div
+              className="hidden md:flex border-t border-l"
+              style={{ minHeight: "1088px" }}
+            >
               {/* Time column */}
               <div className="w-20 sm:w-24 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30">
                 <div className="h-12 border-b bg-muted/50 sticky top-0"></div>
@@ -779,21 +798,25 @@ export default function RoomCalendar({
                     <div
                       key={hour}
                       className={`h-16 border-b border-dashed border-muted-foreground/20 relative ${
-                        isLunchHour ? "bg-orange-50/30 dark:bg-orange-950/10" : ""
-                    }`}
-                  >
+                        isLunchHour
+                          ? "bg-orange-50/30 dark:bg-orange-950/10"
+                          : ""
+                      }`}
+                    >
                       <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
-                        {hour <= 12 ? `${hour === 0 ? 12 : hour}:00` : `${hour - 12}:00`}
+                        {hour <= 12
+                          ? `${hour === 0 ? 12 : hour}:00`
+                          : `${hour - 12}:00`}
                         {hour >= 12 ? " PM" : hour === 0 ? " AM" : " AM"}
-                    </div>
                       </div>
+                    </div>
                   );
                 })}
-                  </div>
+              </div>
 
               {/* Days columns */}
               <div className="flex-1 flex">
-                  {weekDays.map((day) => {
+                {weekDays.map((day) => {
                   // Get all events for this day (filter out cancelled if not showing)
                   const dayEvents = effectiveTimetable.filter((slot) => {
                     const slotStart = parseISO(slot.start_time);
@@ -801,44 +824,44 @@ export default function RoomCalendar({
                       slotStart.getFullYear() === day.getFullYear() &&
                       slotStart.getMonth() === day.getMonth() &&
                       slotStart.getDate() === day.getDate();
-                    
+
                     // Filter out cancelled slots if not showing them
                     if (!showCancelled && slot.is_cancelled) {
                       return false;
                     }
-                    
+
                     return isSameDay;
                   });
 
                   // Group overlapping events together (transitive closure)
-                  const eventGroups: typeof dayEvents[] = [];
+                  const eventGroups: (typeof dayEvents)[] = [];
                   const processed = new Set<string>();
-                  
+
                   dayEvents.forEach((slot) => {
                     if (processed.has(slot.slot_id)) return;
-                    
+
                     const slotStart = parseISO(slot.start_time);
                     const slotEnd = parseISO(slot.end_time);
                     const group: typeof dayEvents = [slot];
                     processed.add(slot.slot_id);
-                    
+
                     // Find all events that overlap with any event in this group
                     let foundNew = true;
                     while (foundNew) {
                       foundNew = false;
                       dayEvents.forEach((otherSlot) => {
                         if (processed.has(otherSlot.slot_id)) return;
-                        
+
                         const otherStart = parseISO(otherSlot.start_time);
                         const otherEnd = parseISO(otherSlot.end_time);
-                        
+
                         // Check if this event overlaps with any event in the current group
                         const overlaps = group.some((groupSlot) => {
                           const groupStart = parseISO(groupSlot.start_time);
                           const groupEnd = parseISO(groupSlot.end_time);
                           return otherStart < groupEnd && otherEnd > groupStart;
                         });
-                        
+
                         if (overlaps) {
                           group.push(otherSlot);
                           processed.add(otherSlot.slot_id);
@@ -846,14 +869,14 @@ export default function RoomCalendar({
                         }
                       });
                     }
-                    
+
                     // Sort group by start time
                     group.sort((a, b) => {
                       const aStart = parseISO(a.start_time).getTime();
                       const bStart = parseISO(b.start_time).getTime();
                       return aStart - bStart;
                     });
-                    
+
                     eventGroups.push(group);
                   });
 
@@ -861,34 +884,42 @@ export default function RoomCalendar({
                   const eventsWithPositions = dayEvents.map((slot) => {
                     const slotStart = parseISO(slot.start_time);
                     const slotEnd = parseISO(slot.end_time);
-                    
+
                     // Calculate position from top (7:00 AM = 0)
                     const startHour = slotStart.getHours();
                     const startMinute = slotStart.getMinutes();
-                    const startPosition = (startHour - 7) * 64 + (startMinute / 60) * 64;
-                    
+                    const startPosition =
+                      (startHour - 7) * 64 + (startMinute / 60) * 64;
+
                     // Calculate height based on duration
-                    const durationMinutes = (slotEnd.getTime() - slotStart.getTime()) / (1000 * 60);
+                    const durationMinutes =
+                      (slotEnd.getTime() - slotStart.getTime()) / (1000 * 60);
                     const height = (durationMinutes / 60) * 64;
 
                     // Find which group this slot belongs to
-                    const group = eventGroups.find((g) => 
-                      g.some((e) => e.slot_id === slot.slot_id)
+                    const group = eventGroups.find((g) =>
+                      g.some((e) => e.slot_id === slot.slot_id),
                     ) || [slot];
-                    
-                    const overlapIndex = group.findIndex(e => e.slot_id === slot.slot_id);
+
+                    const overlapIndex = group.findIndex(
+                      (e) => e.slot_id === slot.slot_id,
+                    );
                     const overlapCount = group.length;
-                    
+
                     // Calculate width and position for side-by-side display
-                    const widthPercent = overlapCount > 1 ? 100 / overlapCount : 100;
-                    const leftPercent = overlapCount > 1 ? (overlapIndex * widthPercent) : 0;
+                    const widthPercent =
+                      overlapCount > 1 ? 100 / overlapCount : 100;
+                    const leftPercent =
+                      overlapCount > 1 ? overlapIndex * widthPercent : 0;
 
                     // Check if slot is in the past
                     const now = new Date();
                     const isPast = slotEnd < now;
 
                     // Check if it's lunch time (12:30-1:30)
-                    const isLunchTime = (startHour === 12 && startMinute === 30) || (startHour === 13 && startMinute === 30);
+                    const isLunchTime =
+                      (startHour === 12 && startMinute === 30) ||
+                      (startHour === 13 && startMinute === 30);
 
                     // Determine slot type and permissions
                     const isTemplate = slot.slot_type === "template";
@@ -920,8 +951,8 @@ export default function RoomCalendar({
                     };
                   });
 
-                    return (
-                      <div
+                  return (
+                    <div
                       key={day.toISOString()}
                       className="flex-1 border-r relative"
                       style={{ minWidth: "calc((100% - 96px) / 7)" }}
@@ -957,16 +988,16 @@ export default function RoomCalendar({
                                   ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
                                   : "hidden"
                                 : event.isPast
-                                ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
-                                : event.isLunchTime
-                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
-                                : event.isTemplate
-                                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
-                                : event.isBooking
-                                ? event.isUserSlot
-                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                  : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                : "bg-gray-100 dark:bg-gray-800"
+                                  ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
+                                  : event.isLunchTime
+                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                    : event.isTemplate
+                                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                      : event.isBooking
+                                        ? event.isUserSlot
+                                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
+                                          : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                        : "bg-gray-100 dark:bg-gray-800"
                             }`}
                             style={{
                               top: `${event.startPosition}px`,
@@ -975,16 +1006,22 @@ export default function RoomCalendar({
                               left: `${event.leftPercent}%`,
                               width: `${event.widthPercent}%`,
                               marginLeft: event.leftPercent === 0 ? "4px" : "0",
-                              marginRight: event.leftPercent + event.widthPercent >= 100 ? "4px" : "2px",
+                              marginRight:
+                                event.leftPercent + event.widthPercent >= 100
+                                  ? "4px"
+                                  : "2px",
                             }}
                             onClick={() => {
                               if (event.isCancelled) {
-                                handleSlotClick(day, format(parseISO(event.start_time), "HH:mm"));
+                                handleSlotClick(
+                                  day,
+                                  format(parseISO(event.start_time), "HH:mm"),
+                                );
                                 return;
                               }
                               if (event.isBooking && event.booking_id) {
                                 const booking = bookings.find(
-                                  (b) => b.id === event.booking_id
+                                  (b) => b.id === event.booking_id,
                                 );
                                 if (booking) {
                                   handleBookingClick(booking);
@@ -1006,29 +1043,36 @@ export default function RoomCalendar({
                             }}
                           >
                             <div className="h-full flex flex-col overflow-hidden gap-0.5">
-                              <div className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate" title={event.title}>
+                              <div
+                                className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate"
+                                title={event.title}
+                              >
                                 {event.title}
-                            </div>
-                              <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
-                                {format(parseISO(event.start_time), "h:mm a")} - {format(parseISO(event.end_time), "h:mm a")}
-                            </div>
-                              {event.teacher_name && (
-                                <div className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate" title={event.teacher_name}>
-                                  {event.teacher_name}
                               </div>
-                            )}
+                              <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
+                                {format(parseISO(event.start_time), "h:mm a")} -{" "}
+                                {format(parseISO(event.end_time), "h:mm a")}
+                              </div>
+                              {event.teacher_name && (
+                                <div
+                                  className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate"
+                                  title={event.teacher_name}
+                                >
+                                  {event.teacher_name}
+                                </div>
+                              )}
                               {event.isTemplate && (
                                 <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
                                   Template
-                          </div>
+                                </div>
                               )}
                               {event.isUserSlot && !event.isTemplate && (
                                 <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
                                   Manage
-                            </div>
+                                </div>
                               )}
+                            </div>
                           </div>
-                              </div>
                         ))}
 
                         {/* Clickable empty slots and hour markers */}
@@ -1039,7 +1083,7 @@ export default function RoomCalendar({
                           const slotInPast = isBefore(slotTime, new Date());
                           // Lunch time is 12:30-1:30, highlight the 12:00-1:00 and 1:00-2:00 slots
                           const isLunchHour = hour === 12 || hour === 13;
-                          
+
                           return (
                             <div
                               key={hour}
@@ -1047,8 +1091,8 @@ export default function RoomCalendar({
                                 slotInPast
                                   ? "bg-gray-100/30 dark:bg-gray-800/30 cursor-not-allowed"
                                   : isLunchHour
-                                  ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
-                                  : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
+                                    ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
+                                    : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
                               }`}
                               style={{
                                 top: `${i * 64}px`,
@@ -1056,17 +1100,372 @@ export default function RoomCalendar({
                               }}
                               onClick={() => {
                                 if (!slotInPast && user) {
-                                  handleSlotClick(day, `${hour.toString().padStart(2, "0")}:00`);
+                                  handleSlotClick(
+                                    day,
+                                    `${hour.toString().padStart(2, "0")}:00`,
+                                  );
                                 }
                               }}
                             />
                           );
                         })}
-                          </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* MOBILE CALENDAR */}
+            <div className="md:hidden border-t border-l">
+              <div className="flex">
+                {/* Fixed Time Column */}
+                <div className="w-20 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30">
+                  <div className="h-12 border-b bg-muted/50 sticky top-0"></div>
+
+                  {Array.from({ length: 17 }, (_, i) => {
+                    const hour = 7 + i;
+                    const isLunchHour = hour === 12;
+                    return (
+                      <div
+                        key={hour}
+                        className={`h-16 border-b border-dashed border-muted-foreground/20 relative ${
+                          isLunchHour
+                            ? "bg-orange-50/30 dark:bg-orange-950/10"
+                            : ""
+                        }`}
+                      >
+                        <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
+                          {hour <= 12
+                            ? `${hour === 0 ? 12 : hour}:00`
+                            : `${hour - 12}:00`}
+                          {hour >= 12 ? " PM" : " AM"}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Scrollable Days */}
+                <div className="flex-1 overflow-x-auto overscroll-x-contain touch-pan-x">
+                  <div className="flex min-w-[900px] sm:min-w-[1050px]">
+                    {weekDays.map((day) => {
+                      // Get all events for this day (filter out cancelled if not showing)
+                      const dayEvents = effectiveTimetable.filter((slot) => {
+                        const slotStart = parseISO(slot.start_time);
+                        const isSameDay =
+                          slotStart.getFullYear() === day.getFullYear() &&
+                          slotStart.getMonth() === day.getMonth() &&
+                          slotStart.getDate() === day.getDate();
+
+                        // Filter out cancelled slots if not showing them
+                        if (!showCancelled && slot.is_cancelled) {
+                          return false;
+                        }
+
+                        return isSameDay;
+                      });
+
+                      // Group overlapping events together (transitive closure)
+                      const eventGroups: (typeof dayEvents)[] = [];
+                      const processed = new Set<string>();
+
+                      dayEvents.forEach((slot) => {
+                        if (processed.has(slot.slot_id)) return;
+
+                        const slotStart = parseISO(slot.start_time);
+                        const slotEnd = parseISO(slot.end_time);
+                        const group: typeof dayEvents = [slot];
+                        processed.add(slot.slot_id);
+
+                        // Find all events that overlap with any event in this group
+                        let foundNew = true;
+                        while (foundNew) {
+                          foundNew = false;
+                          dayEvents.forEach((otherSlot) => {
+                            if (processed.has(otherSlot.slot_id)) return;
+
+                            const otherStart = parseISO(otherSlot.start_time);
+                            const otherEnd = parseISO(otherSlot.end_time);
+
+                            // Check if this event overlaps with any event in the current group
+                            const overlaps = group.some((groupSlot) => {
+                              const groupStart = parseISO(groupSlot.start_time);
+                              const groupEnd = parseISO(groupSlot.end_time);
+                              return (
+                                otherStart < groupEnd && otherEnd > groupStart
+                              );
+                            });
+
+                            if (overlaps) {
+                              group.push(otherSlot);
+                              processed.add(otherSlot.slot_id);
+                              foundNew = true;
+                            }
+                          });
+                        }
+
+                        // Sort group by start time
+                        group.sort((a, b) => {
+                          const aStart = parseISO(a.start_time).getTime();
+                          const bStart = parseISO(b.start_time).getTime();
+                          return aStart - bStart;
+                        });
+
+                        eventGroups.push(group);
+                      });
+
+                      // Calculate positions for overlapping events
+                      const eventsWithPositions = dayEvents.map((slot) => {
+                        const slotStart = parseISO(slot.start_time);
+                        const slotEnd = parseISO(slot.end_time);
+
+                        // Calculate position from top (7:00 AM = 0)
+                        const startHour = slotStart.getHours();
+                        const startMinute = slotStart.getMinutes();
+                        const startPosition =
+                          (startHour - 7) * 64 + (startMinute / 60) * 64;
+
+                        // Calculate height based on duration
+                        const durationMinutes =
+                          (slotEnd.getTime() - slotStart.getTime()) /
+                          (1000 * 60);
+                        const height = (durationMinutes / 60) * 64;
+
+                        // Find which group this slot belongs to
+                        const group = eventGroups.find((g) =>
+                          g.some((e) => e.slot_id === slot.slot_id),
+                        ) || [slot];
+
+                        const overlapIndex = group.findIndex(
+                          (e) => e.slot_id === slot.slot_id,
+                        );
+                        const overlapCount = group.length;
+
+                        // Calculate width and position for side-by-side display
+                        const widthPercent =
+                          overlapCount > 1 ? 100 / overlapCount : 100;
+                        const leftPercent =
+                          overlapCount > 1 ? overlapIndex * widthPercent : 0;
+
+                        // Check if slot is in the past
+                        const now = new Date();
+                        const isPast = slotEnd < now;
+
+                        // Check if it's lunch time (12:30-1:30)
+                        const isLunchTime =
+                          (startHour === 12 && startMinute === 30) ||
+                          (startHour === 13 && startMinute === 30);
+
+                        // Determine slot type and permissions
+                        const isTemplate = slot.slot_type === "template";
+                        const isCancelled = slot.is_cancelled === true;
+                        const isBooking = slot.slot_type === "booking";
+                        const isUserSlot =
+                          (isBooking &&
+                            slot.booking_id &&
+                            bookings.find((b) => b.id === slot.booking_id)
+                              ?.teacher_id === user?.id) ||
+                          (isTemplate &&
+                            slot.teacher_name &&
+                            userProfile?.full_name &&
+                            slot.teacher_name.toLowerCase() ===
+                              userProfile.full_name.toLowerCase());
+
+                        return {
+                          ...slot,
+                          startPosition,
+                          height,
+                          isTemplate,
+                          isCancelled,
+                          isBooking,
+                          isUserSlot,
+                          isPast,
+                          isLunchTime,
+                          widthPercent,
+                          leftPercent,
+                        };
+                      });
+
+                      return (
+                        <div
+                          key={day.toISOString()}
+                          className="w-[130px] sm:w-[150px] border-r relative"
+                        >
+                          {/* Day header */}
+                          <div className="h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20">
+                            <div className="font-bold text-xs">
+                              {format(day, "EEE")}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {format(day, "MMM d")}
+                            </div>
+                          </div>
+
+                          {/* Day timeline container */}
+                          <div
+                            className="relative"
+                            style={{ height: "1088px" }}
+                          >
+                            {/* Hour lines */}
+                            {Array.from({ length: 17 }, (_, i) => (
+                              <div
+                                key={i}
+                                className="absolute left-0 right-0 border-b border-dashed border-muted-foreground/10"
+                                style={{ top: `${i * 64}px` }}
+                              />
+                            ))}
+
+                            {/* Events */}
+                            {eventsWithPositions.map((event) => (
+                              <div
+                                key={`${event.slot_id}-${event.start_time}`}
+                                className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
+                                  event.isCancelled
+                                    ? showCancelled
+                                      ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                      : "hidden"
+                                    : event.isPast
+                                      ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
+                                      : event.isLunchTime
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                        : event.isTemplate
+                                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                          : event.isBooking
+                                            ? event.isUserSlot
+                                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
+                                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                            : "bg-gray-100 dark:bg-gray-800"
+                                }`}
+                                style={{
+                                  top: `${event.startPosition}px`,
+                                  height: `${Math.max(event.height, 56)}px`,
+                                  minHeight: "56px",
+                                  left: `${event.leftPercent}%`,
+                                  width: `${event.widthPercent}%`,
+                                  marginLeft:
+                                    event.leftPercent === 0 ? "4px" : "0",
+                                  marginRight:
+                                    event.leftPercent + event.widthPercent >=
+                                    100
+                                      ? "4px"
+                                      : "2px",
+                                }}
+                                onClick={() => {
+                                  if (event.isCancelled) {
+                                    handleSlotClick(
+                                      day,
+                                      format(
+                                        parseISO(event.start_time),
+                                        "HH:mm",
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  if (event.isBooking && event.booking_id) {
+                                    const booking = bookings.find(
+                                      (b) => b.id === event.booking_id,
+                                    );
+                                    if (booking) {
+                                      handleBookingClick(booking);
+                                      return;
+                                    }
+                                  }
+                                  // Open sidebar for templates (both user and non-user)
+                                  if (event.isTemplate) {
+                                    const weekStartForException = startOfWeek(
+                                      day,
+                                      {
+                                        weekStartsOn: 1,
+                                      },
+                                    );
+                                    setActiveTemplate({
+                                      slot: event,
+                                      weekStart: weekStartForException,
+                                    });
+                                    setDetailsOpen(true);
+                                    return;
+                                  }
+                                }}
+                              >
+                                <div className="h-full flex flex-col overflow-hidden gap-0.5">
+                                  <div
+                                    className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate"
+                                    title={event.title}
+                                  >
+                                    {event.title}
+                                  </div>
+                                  <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
+                                    {format(
+                                      parseISO(event.start_time),
+                                      "h:mm a",
+                                    )}{" "}
+                                    -{" "}
+                                    {format(parseISO(event.end_time), "h:mm a")}
+                                  </div>
+                                  {event.teacher_name && (
+                                    <div
+                                      className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate"
+                                      title={event.teacher_name}
+                                    >
+                                      {event.teacher_name}
+                                    </div>
+                                  )}
+                                  {event.isTemplate && (
+                                    <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
+                                      Template
+                                    </div>
+                                  )}
+                                  {event.isUserSlot && !event.isTemplate && (
+                                    <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
+                                      Manage
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Clickable empty slots and hour markers */}
+                            {Array.from({ length: 17 }, (_, i) => {
+                              const hour = 7 + i;
+                              const slotTime = new Date(day);
+                              slotTime.setHours(hour, 0, 0, 0);
+                              const slotInPast = isBefore(slotTime, new Date());
+                              // Lunch time is 12:30-1:30, highlight the 12:00-1:00 and 1:00-2:00 slots
+                              const isLunchHour = hour === 12 || hour === 13;
+
+                              return (
+                                <div
+                                  key={hour}
+                                  className={`absolute left-0 right-0 transition-colors ${
+                                    slotInPast
+                                      ? "bg-gray-100/30 dark:bg-gray-800/30 cursor-not-allowed"
+                                      : isLunchHour
+                                        ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
+                                        : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
+                                  }`}
+                                  style={{
+                                    top: `${i * 64}px`,
+                                    height: "64px",
+                                  }}
+                                  onClick={() => {
+                                    if (!slotInPast && user) {
+                                      handleSlotClick(
+                                        day,
+                                        `${hour.toString().padStart(2, "0")}:00`,
+                                      );
+                                    }
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
