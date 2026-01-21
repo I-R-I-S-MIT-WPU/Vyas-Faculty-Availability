@@ -157,7 +157,7 @@ export default function RoomCalendar({
   } | null>(null);
   const { user } = useAuth();
   const [userProfile, setUserProfile] = useState<{ full_name: string } | null>(
-    null
+    null,
   );
 
   // Simple discovery state when no room selected
@@ -242,7 +242,7 @@ export default function RoomCalendar({
   }, [selectedBuildingId, selectedRoom]);
 
   const fetchEffectiveTimetable = async (
-    options: { silent?: boolean } = {}
+    options: { silent?: boolean } = {},
   ) => {
     if (!selectedRoom) return [];
 
@@ -285,7 +285,7 @@ export default function RoomCalendar({
             // Check repeat interval
             const weekDiff = Math.floor(
               (weekStart.getTime() - new Date(t.effective_from).getTime()) /
-                (7 * 24 * 60 * 60 * 1000)
+                (7 * 24 * 60 * 60 * 1000),
             );
             const shouldShowByRepeat =
               t.repeat_interval_weeks === 1 ||
@@ -293,7 +293,7 @@ export default function RoomCalendar({
 
             // Check if cancelled
             const isCancelled = exceptions?.some(
-              (e: any) => e.template_id === t.id
+              (e: any) => e.template_id === t.id,
             );
 
             return {
@@ -327,7 +327,7 @@ export default function RoomCalendar({
         {
           p_room_id: selectedRoom.id,
           p_week_start: weekStartDate,
-        }
+        },
       );
 
       if (error) {
@@ -352,7 +352,7 @@ export default function RoomCalendar({
         })),
         bookings: timetable.filter((s) => s.slot_type === "booking").length,
         cancelled: timetable.filter(
-          (s) => s.slot_type === "exception_cancelled"
+          (s) => s.slot_type === "exception_cancelled",
         ).length,
         weekStart: weekStartDate,
       });
@@ -367,7 +367,7 @@ export default function RoomCalendar({
           `
           *,
           profiles:profiles!bookings_teacher_id_fkey(full_name, email)
-        `
+        `,
         )
         .eq("room_id", selectedRoom.id)
         .eq("status", "confirmed")
@@ -447,7 +447,7 @@ export default function RoomCalendar({
 
   const isSlotDisabled = (
     day: Date,
-    timeSlot: { hour: number; minute: number }
+    timeSlot: { hour: number; minute: number },
   ) => {
     const now = new Date();
     const slotTime = new Date(day);
@@ -521,7 +521,7 @@ export default function RoomCalendar({
   if (!selectedRoom) {
     // Filter and flatten rooms
     const allRooms = floors.flatMap((f) =>
-      f.rooms.map((r) => ({ room: r, floor: f }))
+      f.rooms.map((r) => ({ room: r, floor: f })),
     );
     const filteredRooms = allRooms.filter(({ room }) => {
       const matchesSearch = searchTerm
@@ -636,7 +636,7 @@ export default function RoomCalendar({
                       map.set(floorName, [] as typeof filteredRooms);
                     map.get(floorName)!.push(item);
                     return map;
-                  }, new Map<string, typeof filteredRooms>())
+                  }, new Map<string, typeof filteredRooms>()),
                 ).map(([floorName, roomsOnFloor]) => (
                   <div key={floorName}>
                     <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
@@ -898,11 +898,11 @@ export default function RoomCalendar({
 
                     // Find which group this slot belongs to
                     const group = eventGroups.find((g) =>
-                      g.some((e) => e.slot_id === slot.slot_id)
+                      g.some((e) => e.slot_id === slot.slot_id),
                     ) || [slot];
 
                     const overlapIndex = group.findIndex(
-                      (e) => e.slot_id === slot.slot_id
+                      (e) => e.slot_id === slot.slot_id,
                     );
                     const overlapCount = group.length;
 
@@ -988,16 +988,16 @@ export default function RoomCalendar({
                                   ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
                                   : "hidden"
                                 : event.isPast
-                                ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
-                                : event.isLunchTime
-                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
-                                : event.isTemplate
-                                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
-                                : event.isBooking
-                                ? event.isUserSlot
-                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                  : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                : "bg-gray-100 dark:bg-gray-800"
+                                  ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
+                                  : event.isLunchTime
+                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                    : event.isTemplate
+                                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                      : event.isBooking
+                                        ? event.isUserSlot
+                                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
+                                          : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                        : "bg-gray-100 dark:bg-gray-800"
                             }`}
                             style={{
                               top: `${event.startPosition}px`,
@@ -1015,13 +1015,13 @@ export default function RoomCalendar({
                               if (event.isCancelled) {
                                 handleSlotClick(
                                   day,
-                                  format(parseISO(event.start_time), "HH:mm")
+                                  format(parseISO(event.start_time), "HH:mm"),
                                 );
                                 return;
                               }
                               if (event.isBooking && event.booking_id) {
                                 const booking = bookings.find(
-                                  (b) => b.id === event.booking_id
+                                  (b) => b.id === event.booking_id,
                                 );
                                 if (booking) {
                                   handleBookingClick(booking);
@@ -1091,8 +1091,8 @@ export default function RoomCalendar({
                                 slotInPast
                                   ? "bg-gray-100/30 dark:bg-gray-800/30 cursor-not-allowed"
                                   : isLunchHour
-                                  ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
-                                  : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
+                                    ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
+                                    : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
                               }`}
                               style={{
                                 top: `${i * 64}px`,
@@ -1102,7 +1102,7 @@ export default function RoomCalendar({
                                 if (!slotInPast && user) {
                                   handleSlotClick(
                                     day,
-                                    `${hour.toString().padStart(2, "0")}:00`
+                                    `${hour.toString().padStart(2, "0")}:00`,
                                   );
                                 }
                               }}
@@ -1147,8 +1147,8 @@ export default function RoomCalendar({
                 </div>
 
                 {/* Scrollable Days */}
-                <div className="flex-1 overflow-x-auto">
-                  <div className="flex min-w-[700px]">
+                <div className="flex-1 overflow-x-auto overscroll-x-contain touch-pan-x">
+                  <div className="flex min-w-[900px] sm:min-w-[1050px]">
                     {weekDays.map((day) => {
                       // Get all events for this day (filter out cancelled if not showing)
                       const dayEvents = effectiveTimetable.filter((slot) => {
@@ -1234,11 +1234,11 @@ export default function RoomCalendar({
 
                         // Find which group this slot belongs to
                         const group = eventGroups.find((g) =>
-                          g.some((e) => e.slot_id === slot.slot_id)
+                          g.some((e) => e.slot_id === slot.slot_id),
                         ) || [slot];
 
                         const overlapIndex = group.findIndex(
-                          (e) => e.slot_id === slot.slot_id
+                          (e) => e.slot_id === slot.slot_id,
                         );
                         const overlapCount = group.length;
 
@@ -1290,7 +1290,7 @@ export default function RoomCalendar({
                       return (
                         <div
                           key={day.toISOString()}
-                          className="w-[100px] border-r relative"
+                          className="w-[130px] sm:w-[150px] border-r relative"
                         >
                           {/* Day header */}
                           <div className="h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20">
@@ -1326,16 +1326,16 @@ export default function RoomCalendar({
                                       ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
                                       : "hidden"
                                     : event.isPast
-                                    ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
-                                    : event.isLunchTime
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
-                                    : event.isTemplate
-                                    ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
-                                    : event.isBooking
-                                    ? event.isUserSlot
-                                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                      : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                    : "bg-gray-100 dark:bg-gray-800"
+                                      ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
+                                      : event.isLunchTime
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                        : event.isTemplate
+                                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                          : event.isBooking
+                                            ? event.isUserSlot
+                                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
+                                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                            : "bg-gray-100 dark:bg-gray-800"
                                 }`}
                                 style={{
                                   top: `${event.startPosition}px`,
@@ -1357,14 +1357,14 @@ export default function RoomCalendar({
                                       day,
                                       format(
                                         parseISO(event.start_time),
-                                        "HH:mm"
-                                      )
+                                        "HH:mm",
+                                      ),
                                     );
                                     return;
                                   }
                                   if (event.isBooking && event.booking_id) {
                                     const booking = bookings.find(
-                                      (b) => b.id === event.booking_id
+                                      (b) => b.id === event.booking_id,
                                     );
                                     if (booking) {
                                       handleBookingClick(booking);
@@ -1377,7 +1377,7 @@ export default function RoomCalendar({
                                       day,
                                       {
                                         weekStartsOn: 1,
-                                      }
+                                      },
                                     );
                                     setActiveTemplate({
                                       slot: event,
@@ -1398,7 +1398,7 @@ export default function RoomCalendar({
                                   <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
                                     {format(
                                       parseISO(event.start_time),
-                                      "h:mm a"
+                                      "h:mm a",
                                     )}{" "}
                                     -{" "}
                                     {format(parseISO(event.end_time), "h:mm a")}
@@ -1441,8 +1441,8 @@ export default function RoomCalendar({
                                     slotInPast
                                       ? "bg-gray-100/30 dark:bg-gray-800/30 cursor-not-allowed"
                                       : isLunchHour
-                                      ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
-                                      : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
+                                        ? "bg-orange-50/20 dark:bg-orange-950/10 cursor-pointer hover:bg-orange-100/30 dark:hover:bg-orange-950/20"
+                                        : "cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/10"
                                   }`}
                                   style={{
                                     top: `${i * 64}px`,
@@ -1452,7 +1452,7 @@ export default function RoomCalendar({
                                     if (!slotInPast && user) {
                                       handleSlotClick(
                                         day,
-                                        `${hour.toString().padStart(2, "0")}:00`
+                                        `${hour.toString().padStart(2, "0")}:00`,
                                       );
                                     }
                                   }}

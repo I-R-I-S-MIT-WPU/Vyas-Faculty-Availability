@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\admin\BuildingManagementDialog.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,7 @@ export default function BuildingManagementDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: "Error",
@@ -46,7 +47,7 @@ export default function BuildingManagementDialog({
 
     try {
       setLoading(true);
-      
+
       const { data, error } = await supabase
         .from("buildings")
         .insert({
@@ -98,50 +99,57 @@ export default function BuildingManagementDialog({
           Add Building
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-[95vw] scale-[0.95] sm:scale-100 sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Building2 className="h-5 w-5 text-blue-600" />
             <span>Add New Building</span>
           </DialogTitle>
           <DialogDescription>
-            Add a new building to the system. All fields are optional except the building name.
+            Add a new building to the system. All fields are optional except the
+            building name.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Building Name *</Label>
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               placeholder="e.g., Vyas Building, Science Block"
               required
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
             <Input
               id="address"
               value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, address: e.target.value })
+              }
               placeholder="e.g., Main Campus, North Wing"
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               placeholder="Brief description of the building..."
               rows={3}
             />
           </div>
-          
-          <div className="flex justify-end space-x-2 pt-4">
+
+          <div className="flex justify-end gap-3 pt-4">
             <Button
               type="button"
               variant="outline"

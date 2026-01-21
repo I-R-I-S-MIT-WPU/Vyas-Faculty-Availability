@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\selectors\FreeRooms.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,7 @@ function isRoomFree(
   bookingsByRoom: Record<string, Booking[]>,
   roomId: string,
   start: Date,
-  end: Date
+  end: Date,
 ) {
   const list = bookingsByRoom[roomId] || [];
   for (const b of list) {
@@ -112,7 +113,7 @@ export default function FreeRooms({
               *,
               building:buildings(*)
             )
-          `
+          `,
           )
           .eq("is_active", true)
           .order("name");
@@ -171,7 +172,7 @@ export default function FreeRooms({
         setRooms(flattened);
         console.log(
           "All room types found:",
-          flattened.map((r) => r.room_type)
+          flattened.map((r) => r.room_type),
         );
         setBookings(bookingsRes.data || []);
       } catch (e) {
@@ -225,7 +226,7 @@ export default function FreeRooms({
       .filter(
         (r) =>
           filterMinCapacity === "any" ||
-          (r.capacity || 0) >= parseInt(filterMinCapacity)
+          (r.capacity || 0) >= parseInt(filterMinCapacity),
       )
       .filter((r) => isRoomFree(bookingsByRoom, r.id, windowStart, windowEnd));
   }, [
@@ -264,15 +265,15 @@ export default function FreeRooms({
       const freeRoomsInHour = filteredRooms
         .filter(
           (room) =>
-            filterRoomType === "any" || room.room_type === filterRoomType
+            filterRoomType === "any" || room.room_type === filterRoomType,
         )
         .filter(
           (room) =>
             filterMinCapacity === "any" ||
-            (room.capacity || 0) >= parseInt(filterMinCapacity)
+            (room.capacity || 0) >= parseInt(filterMinCapacity),
         )
         .filter((room) =>
-          isRoomFree(bookingsByRoom, room.id, currentHour, nextHour)
+          isRoomFree(bookingsByRoom, room.id, currentHour, nextHour),
         );
 
       if (freeRoomsInHour.length > 0) {
@@ -308,7 +309,7 @@ export default function FreeRooms({
             Find Free Rooms
           </Button>
         </DialogTrigger>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] rounded-2xl overflow-y-auto p-4 sm:p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="flex items-center space-x-2 text-lg sm:text-xl">
               <Clock className="h-5 w-5 text-blue-600" />
@@ -449,23 +450,26 @@ export default function FreeRooms({
   return (
     <Card className="shadow-lg border-0 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
       <CardHeader className="pb-6 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white">
-        <CardTitle className="flex items-center justify-between text-xl font-bold">
-          <span className="flex items-center space-x-3">
-            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+        <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xl font-bold">
+          {/* Left section */}
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm shrink-0">
               <Clock className="h-6 w-6" />
             </div>
             <span>Find Free Rooms</span>
-          </span>
+          </div>
+
+          {/* Right section */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Find All Free
-              </Button>
-            </DialogTrigger>
+            <Button
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+              className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Find All Free
+            </Button>
+
             <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
               <DialogHeader className="mb-4">
                 <DialogTitle className="flex items-center space-x-2 text-lg sm:text-xl">
