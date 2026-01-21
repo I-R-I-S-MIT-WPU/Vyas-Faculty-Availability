@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\calendar\BookingDetailsSidebar.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   Sheet,
@@ -120,7 +121,10 @@ export default function BookingDetailsSidebar({
   });
 
   const isOwner = booking && booking.teacher_id === currentUserId;
-  const isTemplateOwner = template && userProfile && template.teacher_name && 
+  const isTemplateOwner =
+    template &&
+    userProfile &&
+    template.teacher_name &&
     template.teacher_name.toLowerCase() === userProfile.full_name.toLowerCase();
 
   useEffect(() => {
@@ -377,7 +381,7 @@ export default function BookingDetailsSidebar({
 
   const handleCancelTemplate = async () => {
     if (!template || !templateWeekStart || !isTemplateOwner) return;
-    
+
     setIsCancellingTemplate(true);
     try {
       const weekStartDate = format(templateWeekStart, "yyyy-MM-dd");
@@ -396,7 +400,7 @@ export default function BookingDetailsSidebar({
         title: "Class cancelled",
         description: "This class has been cancelled for this week.",
       });
-      
+
       await onTemplateCancelled?.();
     } catch (err: any) {
       console.error("Failed to cancel template", err);
@@ -416,11 +420,43 @@ export default function BookingDetailsSidebar({
         side="right"
         className="w-full sm:max-w-[360px] px-0 border-none bg-transparent data-[state=open]:shadow-none [&>button:last-child]:hidden"
       >
-        <div className="relative m-4 ml-auto flex h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-white/40 bg-white/70 shadow-[0_20px_70px_rgba(15,23,42,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/40">
-          <SheetHeader className="px-6 pt-6">
+        <div
+          className=" 
+            relative
+            mx-auto
+            sm:ml-auto
+            m-3
+            sm:mr-6 sm:mt-6 sm:mb-6
+            flex
+            h-[90vh]
+            sm:h-[calc(100vh-4rem)]
+            w-full
+            max-w-[95vw]
+            sm:max-w-[360]
+            flex-col
+            overflow-hidden
+            rounded-3xl
+            sm:rounded-2xl
+            scale-[0.97]
+            sm:scale-100
+            border
+            border-white/40
+            bg-white/85
+            shadow-[0_20px_70px_rgba(15,23,42,0.35)]
+            backdrop-blur-xl
+            dark:border-white/10
+            dark:bg-slate-900/50
+            sm:translate-y-[-0.5rem]
+          "
+        >
+          <SheetHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
             <div className="flex items-start justify-between gap-3">
-              <SheetTitle className="text-left text-xl">
-                {booking ? "Booking Details" : template ? "Template Details" : "Event Details"}
+              <SheetTitle className="text-left text-lg sm:text-xl">
+                {booking
+                  ? "Booking Details"
+                  : template
+                  ? "Template Details"
+                  : "Event Details"}
               </SheetTitle>
               <SheetClose asChild className="rounded-full">
                 <Button
@@ -435,8 +471,8 @@ export default function BookingDetailsSidebar({
             </div>
           </SheetHeader>
           <Separator className="mt-4" />
-          <div className="flex-1 min-h-0 px-6 py-4">
-            <ScrollArea className="h-full pr-2">
+          <div className="flex-1 min-h-0 px-5 py-4 sm:px-6">
+            <ScrollArea className="h-full pr-3 pb-4">
               {!booking && !template ? (
                 <p className="text-sm text-muted-foreground">
                   Select an event from the timetable to view its details.
@@ -467,16 +503,17 @@ export default function BookingDetailsSidebar({
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span>
-                        {format(parseISO(template.start_time), "EEEE, MMM d, yyyy")}
+                        {format(
+                          parseISO(template.start_time),
+                          "EEEE, MMM d, yyyy"
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span>
-                        {format(parseISO(template.start_time), "h:mm a")} – {format(
-                          parseISO(template.end_time),
-                          "h:mm a"
-                        )}
+                        {format(parseISO(template.start_time), "h:mm a")} –{" "}
+                        {format(parseISO(template.end_time), "h:mm a")}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -521,7 +558,8 @@ export default function BookingDetailsSidebar({
 
                   {!isTemplateOwner && (
                     <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-                      Only {template.teacher_name} can cancel this template class.
+                      Only {template.teacher_name} can cancel this template
+                      class.
                     </div>
                   )}
                 </div>
@@ -778,7 +816,7 @@ export default function BookingDetailsSidebar({
                         />
                       </div>
 
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3 pt-2">
                         <Button
                           type="button"
                           variant="outline"

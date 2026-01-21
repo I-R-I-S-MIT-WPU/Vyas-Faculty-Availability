@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\admin\FloorManagementDialog.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Floor, Building } from "@/types/database";
@@ -170,7 +171,7 @@ export const FloorManagementDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-[95vw] scale-[0.95] sm:scale-100 sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle>{floor ? "Edit Floor" : "Add New Floor"}</DialogTitle>
           <DialogDescription>
@@ -180,7 +181,10 @@ export const FloorManagementDialog = ({
 
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="building" className="text-right">
+            <Label
+              htmlFor="building"
+              className="text-left sm:text-right self-start sm:self-center"
+            >
               Building *
             </Label>
             <Select
@@ -203,7 +207,10 @@ export const FloorManagementDialog = ({
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="number" className="text-right">
+            <Label
+              htmlFor="number"
+              className="text-left sm:text-right self-start sm:self-center"
+            >
               Floor Number *
             </Label>
             <Input
@@ -220,7 +227,10 @@ export const FloorManagementDialog = ({
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="name" className="text-right">
+            <Label
+              htmlFor="name"
+              className="text-left sm:text-right self-start sm:self-center"
+            >
               Floor Name *
             </Label>
             <Input
@@ -235,7 +245,7 @@ export const FloorManagementDialog = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

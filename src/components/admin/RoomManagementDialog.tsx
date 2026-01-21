@@ -1,3 +1,4 @@
+//Vyas-Faculty-Availability\src\components\admin\BuildingManagementDialog.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Room, Floor, RoomTimetableTemplate } from "@/types/database";
@@ -76,7 +77,9 @@ export const RoomManagementDialog = ({
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templateActionLoading, setTemplateActionLoading] = useState(false);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(
+    null,
+  );
   const supabaseAdmin = supabase as any;
 
   const getDefaultEffectiveFrom = () => {
@@ -139,7 +142,7 @@ export const RoomManagementDialog = ({
           `
           *,
           building:buildings(*)
-        `
+        `,
         )
         .order("number");
 
@@ -296,19 +299,23 @@ export const RoomManagementDialog = ({
 
     const weekday = parseInt(templateForm.weekday, 10);
     const durationMinutes = parseInt(templateForm.duration_minutes, 10);
-    const repeatInterval = parseInt(templateForm.repeat_interval_weeks, 10) || 2;
+    const repeatInterval =
+      parseInt(templateForm.repeat_interval_weeks, 10) || 2;
 
     if (Number.isNaN(weekday) || Number.isNaN(durationMinutes)) {
       toast({
         title: "Validation error",
-        description: "Please provide valid numeric values for weekday and duration.",
+        description:
+          "Please provide valid numeric values for weekday and duration.",
         variant: "destructive",
       });
       return;
     }
 
     const startTimeValue = templateForm.start_time.includes(":")
-      ? `${templateForm.start_time}${templateForm.start_time.length === 5 ? ":00" : ""}`
+      ? `${templateForm.start_time}${
+          templateForm.start_time.length === 5 ? ":00" : ""
+        }`
       : templateForm.start_time;
 
     setTemplateActionLoading(true);
@@ -375,7 +382,7 @@ export const RoomManagementDialog = ({
 
   const handleToggleTemplate = async (
     template: RoomTimetableTemplate,
-    nextActive: boolean
+    nextActive: boolean,
   ) => {
     try {
       setTemplateActionLoading(true);
@@ -388,8 +395,8 @@ export const RoomManagementDialog = ({
 
       setTemplates((prev) =>
         prev.map((item) =>
-          item.id === template.id ? { ...item, is_active: nextActive } : item
-        )
+          item.id === template.id ? { ...item, is_active: nextActive } : item,
+        ),
       );
 
       toast({
@@ -440,8 +447,8 @@ export const RoomManagementDialog = ({
 
   const getWeekdayLabel = (weekday: number) => {
     return (
-      WEEKDAY_OPTIONS.find((option) => option.value === weekday.toString())?.label ||
-      "Weekday"
+      WEEKDAY_OPTIONS.find((option) => option.value === weekday.toString())
+        ?.label || "Weekday"
     );
   };
 
@@ -455,7 +462,7 @@ export const RoomManagementDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] scale-[0.95] sm:scale-100 sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle>{room ? "Edit Room" : "Add New Room"}</DialogTitle>
           <DialogDescription>
@@ -618,7 +625,7 @@ export const RoomManagementDialog = ({
             <Label htmlFor="requires_approval" className="text-right">
               Requires approval
             </Label>
-            <div className="col-span-3 flex items-center gap-3">
+            <div className="col-span-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <Select
                 value={formData.requires_approval ? "true" : "false"}
                 onValueChange={(value) =>
@@ -637,7 +644,10 @@ export const RoomManagementDialog = ({
                 </SelectContent>
               </Select>
               {formData.requires_approval && (
-                <Badge variant="outline" className="text-xs">
+                <Badge
+                  variant="outline"
+                  className="text-xs whitespace-normal leading-relaxed"
+                >
                   Requests for this room need admin approval
                 </Badge>
               )}
@@ -814,7 +824,11 @@ export const RoomManagementDialog = ({
                       onClick={handleTemplateSave}
                       disabled={templateActionLoading}
                     >
-                      {templateActionLoading ? "Saving..." : editingTemplateId ? "Update template" : "Save template"}
+                      {templateActionLoading
+                        ? "Saving..."
+                        : editingTemplateId
+                          ? "Update template"
+                          : "Save template"}
                     </Button>
                   </div>
                 </div>
@@ -848,10 +862,20 @@ export const RoomManagementDialog = ({
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {getWeekdayLabel(template.weekday)} · {formatTemplateRange(template.start_time, template.duration_minutes)}
+                            {getWeekdayLabel(template.weekday)} ·{" "}
+                            {formatTemplateRange(
+                              template.start_time,
+                              template.duration_minutes,
+                            )}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Teacher: {template.teacher_name} · Effective from {template.effective_from ? format(new Date(template.effective_from), "MMM dd, yyyy") : "Not set"}
+                            Teacher: {template.teacher_name} · Effective from{" "}
+                            {template.effective_from
+                              ? format(
+                                  new Date(template.effective_from),
+                                  "MMM dd, yyyy",
+                                )
+                              : "Not set"}
                           </p>
                           {template.notes && (
                             <p className="text-sm text-muted-foreground mt-1">
@@ -868,10 +892,15 @@ export const RoomManagementDialog = ({
                                 title: template.title,
                                 teacher_name: template.teacher_name,
                                 weekday: template.weekday.toString(),
-                                start_time: template.start_time?.slice(0, 5) || "08:30",
-                                duration_minutes: template.duration_minutes.toString(),
-                                repeat_interval_weeks: template.repeat_interval_weeks.toString(),
-                                effective_from: template.effective_from || getDefaultEffectiveFrom(),
+                                start_time:
+                                  template.start_time?.slice(0, 5) || "08:30",
+                                duration_minutes:
+                                  template.duration_minutes.toString(),
+                                repeat_interval_weeks:
+                                  template.repeat_interval_weeks.toString(),
+                                effective_from:
+                                  template.effective_from ||
+                                  getDefaultEffectiveFrom(),
                                 notes: template.notes || "",
                               });
                               setEditingTemplateId(template.id);
@@ -882,10 +911,14 @@ export const RoomManagementDialog = ({
                             Edit
                           </Button>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Active</span>
+                            <span className="text-xs text-muted-foreground">
+                              Active
+                            </span>
                             <Switch
                               checked={template.is_active}
-                              onCheckedChange={(value) => handleToggleTemplate(template, value)}
+                              onCheckedChange={(value) =>
+                                handleToggleTemplate(template, value)
+                              }
                               disabled={templateActionLoading}
                             />
                           </div>
@@ -900,7 +933,8 @@ export const RoomManagementDialog = ({
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Repeats every {template.repeat_interval_weeks} week(s) · Auto-generates bookings for matching teachers
+                        Repeats every {template.repeat_interval_weeks} week(s) ·
+                        Auto-generates bookings for matching teachers
                       </p>
                     </div>
                   ))
@@ -910,7 +944,7 @@ export const RoomManagementDialog = ({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
