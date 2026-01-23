@@ -1,4 +1,3 @@
-//Vyas-Faculty-Availability\src\components\calendar\BookingDetailsSidebar.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   Sheet,

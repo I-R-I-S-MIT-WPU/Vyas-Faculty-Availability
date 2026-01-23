@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FreeRooms from "./FreeRooms";
 import {
   Select,
   SelectContent,
@@ -132,7 +133,7 @@ export default function RoomSelector({
       // Prefer default to building named "Vyas" (case-insensitive), else first
       if (buildingsData && buildingsData.length > 0) {
         const vyas = buildingsData.find(
-          (b) => b.name?.toLowerCase() === "vyas"
+          (b) => b.name?.toLowerCase() === "vyas",
         );
         setSelectedBuilding((vyas || buildingsData[0]).id);
       }
@@ -155,7 +156,7 @@ export default function RoomSelector({
           *,
           rooms (*),
           building:buildings(*)
-        `
+        `,
         )
         .eq("building_id", selectedBuilding)
         .order("number");
@@ -179,11 +180,26 @@ export default function RoomSelector({
     onRoomSelect(null); // Clear room selection when floor changes
   };
 
-  const handleRoomSelect = (roomId: string) => {
-    const floor = floors.find((f) => f.id === selectedFloor);
-    const room = floor?.rooms.find((r) => r.id === roomId);
-    onRoomSelect(room || null);
+  const scrollToTopIfMobile = () => {
+    if (typeof window === "undefined") return;
+
+    // Tailwind md = 768px
+    if (window.innerWidth < 768) {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
   };
+
+  // const handleRoomSelect = (roomId: string) => {
+  //   const floor = floors.find((f) => f.id === selectedFloor);
+  //   const room = floor?.rooms.find((r) => r.id === roomId);
+  //   onRoomSelect(room || null);
+
+  //
+
+  // };
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -193,7 +209,7 @@ export default function RoomSelector({
 
   const getAllRooms = () => {
     return floors.flatMap((floor) =>
-      floor.rooms.map((room) => ({ ...room, floor }))
+      floor.rooms.map((room) => ({ ...room, floor })),
     );
   };
 
@@ -205,7 +221,7 @@ export default function RoomSelector({
       allRooms = allRooms.filter(
         (room) =>
           room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          room.room_type.toLowerCase().includes(searchTerm.toLowerCase())
+          room.room_type.toLowerCase().includes(searchTerm.toLowerCase()),
       );
     }
 
@@ -414,6 +430,17 @@ export default function RoomSelector({
             )}
           </div>
 
+          {/* Find Free Rooms – compact trigger */}
+          <div className="flex justify-start pl-1 sm:pl-0">
+            <FreeRooms
+              compactTrigger
+              onRoomSelect={(room) => {
+                onRoomSelect(room);
+                scrollToTopIfMobile();
+              }}
+            />
+          </div>
+
           {filteredRooms.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Building2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -447,7 +474,7 @@ export default function RoomSelector({
                     map.set(floorName, [] as typeof filteredRooms);
                   map.get(floorName)!.push(room);
                   return map;
-                }, new Map<string, typeof filteredRooms>())
+                }, new Map<string, typeof filteredRooms>()),
               ).map(([floorName, roomsOnFloor]) => (
                 <div key={floorName}>
                   <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
@@ -466,7 +493,10 @@ export default function RoomSelector({
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50"
                           }`}
-                          onClick={() => onRoomSelect(room)}
+                          onClick={() => {
+                            onRoomSelect(room);
+                            scrollToTopIfMobile();
+                          }}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -477,12 +507,12 @@ export default function RoomSelector({
                                 <Badge
                                   variant="secondary"
                                   className={`text-xs ${getRoomTypeColor(
-                                    room.room_type
+                                    room.room_type,
                                   )}`}
                                 >
                                   {(() => {
                                     const IconComponent = getRoomTypeIcon(
-                                      room.room_type
+                                      room.room_type,
                                     );
                                     return (
                                       <IconComponent className="h-3 w-3 mr-1" />
@@ -495,13 +525,13 @@ export default function RoomSelector({
                                 const buildingName =
                                   (room as any)?.floor?.building?.name ||
                                   floors.find((f) =>
-                                    f.rooms.some((r) => r.id === room.id)
+                                    f.rooms.some((r) => r.id === room.id),
                                   )?.building?.name ||
                                   "";
                                 const floorName =
                                   (room as any)?.floor?.name ||
                                   floors.find((f) =>
-                                    f.rooms.some((r) => r.id === room.id)
+                                    f.rooms.some((r) => r.id === room.id),
                                   )?.name ||
                                   "";
                                 return (
@@ -560,12 +590,12 @@ export default function RoomSelector({
                 <Badge
                   variant="secondary"
                   className={`text-xs ${getRoomTypeColor(
-                    selectedRoom.room_type
+                    selectedRoom.room_type,
                   )}`}
                 >
                   {(() => {
                     const IconComponent = getRoomTypeIcon(
-                      selectedRoom.room_type
+                      selectedRoom.room_type,
                     );
                     return <IconComponent className="h-3 w-3 mr-1" />;
                   })()}
@@ -574,7 +604,7 @@ export default function RoomSelector({
               </div>
               {(() => {
                 const fallbackFloor = floors.find((f) =>
-                  f.rooms.some((r) => r.id === selectedRoom.id)
+                  f.rooms.some((r) => r.id === selectedRoom.id),
                 );
                 const buildingName =
                   selectedRoom?.floor?.building?.name ||

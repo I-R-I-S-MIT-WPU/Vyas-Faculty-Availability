@@ -1,4 +1,3 @@
-//Vyas-Faculty-Availability\src\components\admin\BuildingManagementDialog.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Room, Floor, RoomTimetableTemplate } from "@/types/database";

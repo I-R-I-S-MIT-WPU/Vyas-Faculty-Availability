@@ -1,4 +1,3 @@
-//Vyas-Faculty-Availability\src\components\admin\BuildingManagementDialog.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
