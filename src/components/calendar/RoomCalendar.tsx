@@ -538,22 +538,23 @@ export default function RoomCalendar({
     });
 
     return (
-      <div className='space-y-4'>
+      <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className='text-base'>
+            <CardTitle className="text-base">
               Start by choosing a building
             </CardTitle>
           </CardHeader>
-          <CardContent className='space-y-3'>
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
-              <div className='space-y-1'>
-                <label className='text-xs font-medium'>Building</label>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Building</label>
                 <Select
                   value={selectedBuildingId}
-                  onValueChange={setSelectedBuildingId}>
+                  onValueChange={setSelectedBuildingId}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder='Select building' />
+                    <SelectValue placeholder="Select building" />
                   </SelectTrigger>
                   <SelectContent>
                     {buildings.map((b) => (
@@ -564,43 +565,43 @@ export default function RoomCalendar({
                   </SelectContent>
                 </Select>
               </div>
-              <div className='space-y-1'>
-                <label className='text-xs font-medium'>Search</label>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Search</label>
                 <Input
-                  placeholder='Room name or type'
+                  placeholder="Room name or type"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='space-y-1'>
-                  <label className='text-xs font-medium'>Room type</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Room type</label>
                   <Select value={roomType} onValueChange={setRoomType}>
                     <SelectTrigger>
-                      <SelectValue placeholder='Any' />
+                      <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='any'>Any</SelectItem>
-                      <SelectItem value='classroom'>Classroom</SelectItem>
-                      <SelectItem value='lab'>Laboratory</SelectItem>
-                      <SelectItem value='conference'>Conference</SelectItem>
-                      <SelectItem value='auditorium'>Auditorium</SelectItem>
-                      <SelectItem value='seminar'>Seminar</SelectItem>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="classroom">Classroom</SelectItem>
+                      <SelectItem value="lab">Laboratory</SelectItem>
+                      <SelectItem value="conference">Conference</SelectItem>
+                      <SelectItem value="auditorium">Auditorium</SelectItem>
+                      <SelectItem value="seminar">Seminar</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className='space-y-1'>
-                  <label className='text-xs font-medium'>Min capacity</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Min capacity</label>
                   <Select value={minCapacity} onValueChange={setMinCapacity}>
                     <SelectTrigger>
-                      <SelectValue placeholder='Any' />
+                      <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='any'>Any</SelectItem>
-                      <SelectItem value='20'>20+</SelectItem>
-                      <SelectItem value='30'>30+</SelectItem>
-                      <SelectItem value='50'>50+</SelectItem>
-                      <SelectItem value='100'>100+</SelectItem>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="20">20+</SelectItem>
+                      <SelectItem value="30">30+</SelectItem>
+                      <SelectItem value="50">50+</SelectItem>
+                      <SelectItem value="100">100+</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -610,8 +611,8 @@ export default function RoomCalendar({
         </Card>
 
         <Card>
-          <CardHeader className='flex flex-row items-center justify-between'>
-            <CardTitle className='text-base'>Rooms</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Rooms</CardTitle>
             {/* Compact Find Free Rooms trigger inside selector box */}
             <FreeRooms
               compactTrigger
@@ -622,12 +623,12 @@ export default function RoomCalendar({
           </CardHeader>
           <CardContent>
             {filteredRooms.length === 0 ? (
-              <div className='text-center py-10 text-muted-foreground'>
-                <Clock className='h-10 w-10 mx-auto mb-2' />
+              <div className="text-center py-10 text-muted-foreground">
+                <Clock className="h-10 w-10 mx-auto mb-2" />
                 <div>No rooms match your filters</div>
               </div>
             ) : (
-              <div className='space-y-4 max-h-[70vh] overflow-y-auto pr-1'>
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {Array.from(
                   filteredRooms.reduce((map, item) => {
                     const floorName = item.floor?.name || "Other";
@@ -638,12 +639,12 @@ export default function RoomCalendar({
                   }, new Map<string, typeof filteredRooms>()),
                 ).map(([floorName, roomsOnFloor]) => (
                   <div key={floorName}>
-                    <div className='sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1'>
-                      <div className='text-xs font-semibold text-muted-foreground flex items-center gap-2'>
-                        <MapPin className='h-3 w-3' /> {floorName}
+                    <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-1 py-1">
+                      <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                        <MapPin className="h-3 w-3" /> {floorName}
                       </div>
                     </div>
-                    <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-1'>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-1">
                       {roomsOnFloor.map(({ room, floor }) => {
                         const TypeIcon = getRoomTypeIcon(room.room_type);
                         const typeColor = getRoomTypeColor(room.room_type);
@@ -652,27 +653,29 @@ export default function RoomCalendar({
                           <div
                             key={room.id}
                             className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm hover:border-primary/50 ${capBg}`}
-                            onClick={() => onRoomSelect && onRoomSelect(room)}>
-                            <div className='flex items-start justify-between'>
-                              <div className='flex-1'>
-                                <div className='flex items-center space-x-2 mb-1'>
-                                  <h4 className='font-medium text-sm'>
+                            onClick={() => onRoomSelect && onRoomSelect(room)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <h4 className="font-medium text-sm">
                                     {room.name}
                                   </h4>
                                   <Badge
-                                    variant='secondary'
-                                    className={`text-xs ${typeColor}`}>
-                                    <TypeIcon className='h-3 w-3 mr-1' />
+                                    variant="secondary"
+                                    className={`text-xs ${typeColor}`}
+                                  >
+                                    <TypeIcon className="h-3 w-3 mr-1" />
                                     {getRoomTypeLabel(room.room_type)}
                                   </Badge>
                                 </div>
-                                <div className='flex items-center space-x-4 text-xs text-muted-foreground'>
-                                  <div className='flex items-center space-x-1'>
-                                    <Building2 className='h-3 w-3' />
+                                <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center space-x-1">
+                                    <Building2 className="h-3 w-3" />
                                     <span>{floor.building.name}</span>
                                   </div>
-                                  <div className='flex items-center space-x-1'>
-                                    <Users className='h-3 w-3' />
+                                  <div className="flex items-center space-x-1">
+                                    <Users className="h-3 w-3" />
                                     <span>{room.capacity || "N/A"} seats</span>
                                   </div>
                                 </div>
@@ -694,93 +697,99 @@ export default function RoomCalendar({
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center h-64'>
-        <div className='text-center'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto'></div>
-          <p className='mt-2 text-muted-foreground'>Loading room schedule...</p>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading room schedule...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className='space-y-4 h-full flex flex-col'>
+    <div className="space-y-4 h-full flex flex-col">
       {/* Week Navigation */}
-      <div className='flex flex-col sm:flex-row items-center justify-between gap-3 px-4 pt-4'>
-        <div className='flex items-center space-x-2 sm:space-x-4'>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 pt-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
           <Button
-            variant='outline'
-            size='sm'
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
-            className='h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3'>
-            <ChevronLeft className='h-4 w-4' />
+            className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3"
+          >
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h2 className='text-base sm:text-lg font-semibold text-center'>
+          <h2 className="text-base sm:text-lg font-semibold text-center">
             {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
           </h2>
           <Button
-            variant='outline'
-            size='sm'
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-            className='h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3'>
-            <ChevronRight className='h-4 w-4' />
+            className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3"
+          >
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
         <Button
           onClick={() => setCurrentWeek(new Date())}
-          variant='outline'
-          size='sm'
-          className='h-8 px-3 text-sm'>
+          variant="outline"
+          size="sm"
+          className="h-8 px-3 text-sm"
+        >
           Today
         </Button>
       </div>
 
       {/* Room Info */}
-      <Card className='shadow-lg border-0 bg-transparent w-full h-full flex flex-col'>
-        <CardHeader className='pb-3 flex-shrink-0 px-4 pt-4 bg-transparent'>
-          <CardTitle className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2'>
-            <span className='text-lg sm:text-xl font-bold'>
+      <Card className="shadow-lg border-0 bg-transparent w-full h-full flex flex-col">
+        <CardHeader className="pb-3 flex-shrink-0 px-4 pt-4 bg-transparent">
+          <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-lg sm:text-xl font-bold">
               {selectedRoom.name}
             </span>
-            <div className='flex items-center gap-2'>
-              <Badge variant='secondary' className='text-xs sm:text-sm'>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs sm:text-sm">
                 {selectedRoom.room_type} • {selectedRoom.capacity} seats
               </Badge>
               {onRoomSelect && (
                 <Button
-                  variant='outline'
-                  size='icon'
-                  className='h-8 w-8'
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
                   onClick={() => onRoomSelect && onRoomSelect(null)}
-                  aria-label='Close room'>
-                  <X className='h-4 w-4' />
+                  aria-label="Close room"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className='px-0 w-full flex-1 flex flex-col min-h-0 bg-transparent'>
+        <CardContent className="px-0 w-full flex-1 flex flex-col min-h-0 bg-transparent">
           {/* Show Cancelled Toggle Button */}
-          <div className='px-4 py-3 border-b flex items-center justify-between flex-shrink-0 bg-transparent'>
-            <div className='flex items-center gap-2'>
+          <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0 bg-transparent">
+            <div className="flex items-center gap-2">
               <Button
-                variant='outline'
-                size='sm'
+                variant="outline"
+                size="sm"
                 onClick={() => setShowCancelled(!showCancelled)}
-                className='text-xs'>
+                className="text-xs"
+              >
                 {showCancelled ? "Hide" : "Show"} Cancelled Classes
               </Button>
             </div>
           </div>
 
-          <div className='flex-1 overflow-y-auto'>
+          <div className="flex-1 overflow-y-auto">
             {/* Continuous Timeline View - Google Calendar Style */}
             <div
-              className='hidden md:flex border-t border-l'
-              style={{ minHeight: "1088px" }}>
+              className="hidden md:flex border-t border-l"
+              style={{ minHeight: "1088px" }}
+            >
               {/* Time column */}
-              <div className='w-20 sm:w-24 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30'>
-                <div className='h-12 border-b bg-muted/50 sticky top-0'></div>
+              <div className="w-20 sm:w-24 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30">
+                <div className="h-12 border-b bg-muted/50 sticky top-0"></div>
                 {/* Time markers from 7:00 to 23:00 */}
                 {Array.from({ length: 17 }, (_, i) => {
                   const hour = 7 + i;
@@ -792,8 +801,9 @@ export default function RoomCalendar({
                         isLunchHour
                           ? "bg-orange-50/30 dark:bg-orange-950/10"
                           : ""
-                      }`}>
-                      <div className='absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2'>
+                      }`}
+                    >
+                      <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
                         {hour <= 12
                           ? `${hour === 0 ? 12 : hour}:00`
                           : `${hour - 12}:00`}
@@ -805,7 +815,7 @@ export default function RoomCalendar({
               </div>
 
               {/* Days columns */}
-              <div className='flex-1 flex'>
+              <div className="flex-1 flex">
                 {weekDays.map((day) => {
                   // Get all events for this day (filter out cancelled if not showing)
                   const dayEvents = effectiveTimetable.filter((slot) => {
@@ -944,25 +954,26 @@ export default function RoomCalendar({
                   return (
                     <div
                       key={day.toISOString()}
-                      className='flex-1 border-r relative'
-                      style={{ minWidth: "calc((100% - 96px) / 7)" }}>
+                      className="flex-1 border-r relative"
+                      style={{ minWidth: "calc((100% - 96px) / 7)" }}
+                    >
                       {/* Day header */}
-                      <div className='h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20 backdrop-blur-sm'>
-                        <div className='font-bold text-xs sm:text-sm'>
+                      <div className="h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20 backdrop-blur-sm">
+                        <div className="font-bold text-xs sm:text-sm">
                           {format(day, "EEE")}
                         </div>
-                        <div className='text-xs text-muted-foreground'>
+                        <div className="text-xs text-muted-foreground">
                           {format(day, "MMM d")}
                         </div>
                       </div>
 
                       {/* Day timeline container */}
-                      <div className='relative' style={{ height: "1088px" }}>
+                      <div className="relative" style={{ height: "1088px" }}>
                         {/* Hour lines */}
                         {Array.from({ length: 17 }, (_, i) => (
                           <div
                             key={i}
-                            className='absolute left-0 right-0 border-b border-dashed border-muted-foreground/10'
+                            className="absolute left-0 right-0 border-b border-dashed border-muted-foreground/10"
                             style={{ top: `${i * 64}px` }}
                           />
                         ))}
@@ -1031,31 +1042,34 @@ export default function RoomCalendar({
                                 setDetailsOpen(true);
                                 return;
                               }
-                            }}>
-                            <div className='h-full flex flex-col overflow-hidden gap-0.5'>
+                            }}
+                          >
+                            <div className="h-full flex flex-col overflow-hidden gap-0.5">
                               <div
-                                className='text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate'
-                                title={event.title}>
+                                className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate"
+                                title={event.title}
+                              >
                                 {event.title}
                               </div>
-                              <div className='text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate'>
+                              <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
                                 {format(parseISO(event.start_time), "h:mm a")} -{" "}
                                 {format(parseISO(event.end_time), "h:mm a")}
                               </div>
                               {event.teacher_name && (
                                 <div
-                                  className='text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate'
-                                  title={event.teacher_name}>
+                                  className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate"
+                                  title={event.teacher_name}
+                                >
                                   {event.teacher_name}
                                 </div>
                               )}
                               {event.isTemplate && (
-                                <div className='text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0'>
+                                <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
                                   Template
                                 </div>
                               )}
                               {event.isUserSlot && !event.isTemplate && (
-                                <div className='text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0'>
+                                <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
                                   Manage
                                 </div>
                               )}
@@ -1105,11 +1119,11 @@ export default function RoomCalendar({
             </div>
 
             {/* MOBILE CALENDAR */}
-            <div className='md:hidden border-t border-l'>
-              <div className='flex'>
+            <div className="md:hidden border-t border-l">
+              <div className="flex">
                 {/* Fixed Time Column */}
-                <div className='w-20 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30'>
-                  <div className='h-12 border-b bg-muted/50 sticky top-0'></div>
+                <div className="w-20 flex-shrink-0 border-r bg-muted/30 sticky left-0 z-30">
+                  <div className="h-12 border-b bg-muted/50 sticky top-0"></div>
 
                   {Array.from({ length: 17 }, (_, i) => {
                     const hour = 7 + i;
@@ -1121,8 +1135,9 @@ export default function RoomCalendar({
                           isLunchHour
                             ? "bg-orange-50/30 dark:bg-orange-950/10"
                             : ""
-                        }`}>
-                        <div className='absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2'>
+                        }`}
+                      >
+                        <div className="absolute left-1 top-0 text-xs text-muted-foreground font-medium whitespace-nowrap pr-2">
                           {hour <= 12
                             ? `${hour === 0 ? 12 : hour}:00`
                             : `${hour - 12}:00`}
@@ -1134,8 +1149,8 @@ export default function RoomCalendar({
                 </div>
 
                 {/* Scrollable Days */}
-                <div className='flex-1 overflow-x-auto overscroll-x-contain touch-pan-x'>
-                  <div className='flex min-w-[900px] sm:min-w-[1050px]'>
+                <div className="flex-1 overflow-x-auto touch-auto">
+                  <div className="flex min-w-[900px] sm:min-w-[1050px]">
                     {weekDays.map((day) => {
                       // Get all events for this day (filter out cancelled if not showing)
                       const dayEvents = effectiveTimetable.filter((slot) => {
@@ -1277,26 +1292,28 @@ export default function RoomCalendar({
                       return (
                         <div
                           key={day.toISOString()}
-                          className='w-[130px] sm:w-[150px] border-r relative'>
+                          className="w-[130px] sm:w-[150px] border-r relative"
+                        >
                           {/* Day header */}
-                          <div className='h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20'>
-                            <div className='font-bold text-xs'>
+                          <div className="h-12 border-b bg-muted/50 p-2 text-center sticky top-0 z-20">
+                            <div className="font-bold text-xs">
                               {format(day, "EEE")}
                             </div>
-                            <div className='text-xs text-muted-foreground'>
+                            <div className="text-xs text-muted-foreground">
                               {format(day, "MMM d")}
                             </div>
                           </div>
 
                           {/* Day timeline container */}
                           <div
-                            className='relative'
-                            style={{ height: "1088px" }}>
+                            className="relative"
+                            style={{ height: "1088px" }}
+                          >
                             {/* Hour lines */}
                             {Array.from({ length: 17 }, (_, i) => (
                               <div
                                 key={i}
-                                className='absolute left-0 right-0 border-b border-dashed border-muted-foreground/10'
+                                className="absolute left-0 right-0 border-b border-dashed border-muted-foreground/10"
                                 style={{ top: `${i * 64}px` }}
                               />
                             ))}
@@ -1374,14 +1391,16 @@ export default function RoomCalendar({
                                     setDetailsOpen(true);
                                     return;
                                   }
-                                }}>
-                                <div className='h-full flex flex-col overflow-hidden gap-0.5'>
+                                }}
+                              >
+                                <div className="h-full flex flex-col overflow-hidden gap-0.5">
                                   <div
-                                    className='text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate'
-                                    title={event.title}>
+                                    className="text-xs sm:text-sm font-semibold leading-tight line-clamp-1 flex-shrink-0 truncate"
+                                    title={event.title}
+                                  >
                                     {event.title}
                                   </div>
-                                  <div className='text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate'>
+                                  <div className="text-[10px] sm:text-xs opacity-80 line-clamp-1 flex-shrink-0 truncate">
                                     {format(
                                       parseISO(event.start_time),
                                       "h:mm a",
@@ -1391,18 +1410,19 @@ export default function RoomCalendar({
                                   </div>
                                   {event.teacher_name && (
                                     <div
-                                      className='text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate'
-                                      title={event.teacher_name}>
+                                      className="text-[10px] sm:text-xs opacity-75 line-clamp-1 flex-shrink-0 truncate"
+                                      title={event.teacher_name}
+                                    >
                                       {event.teacher_name}
                                     </div>
                                   )}
                                   {event.isTemplate && (
-                                    <div className='text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0'>
+                                    <div className="text-[9px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mt-auto flex-shrink-0">
                                       Template
                                     </div>
                                   )}
                                   {event.isUserSlot && !event.isTemplate && (
-                                    <div className='text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0'>
+                                    <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mt-auto flex-shrink-0">
                                       Manage
                                     </div>
                                   )}
@@ -1457,27 +1477,27 @@ export default function RoomCalendar({
       </Card>
 
       {/* Legend */}
-      <Card className='bg-muted/30'>
-        <CardContent className='pt-4 sm:pt-6'>
-          <div className='grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm'>
-            <div className='flex items-center space-x-2'>
-              <div className='w-4 h-4 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded'></div>
+      <Card className="bg-muted/30">
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
               <span>Available</span>
             </div>
-            <div className='flex items-center space-x-2'>
-              <div className='w-4 h-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded'></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded"></div>
               <span>Template</span>
             </div>
-            <div className='flex items-center space-x-2'>
-              <div className='w-4 h-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded border-dashed'></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded border-dashed"></div>
               <span>Cancelled</span>
             </div>
-            <div className='flex items-center space-x-2'>
-              <div className='w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded'></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded"></div>
               <span>Booked</span>
             </div>
-            <div className='flex items-center space-x-2'>
-              <div className='w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded'></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"></div>
               <span>Unavailable</span>
             </div>
           </div>

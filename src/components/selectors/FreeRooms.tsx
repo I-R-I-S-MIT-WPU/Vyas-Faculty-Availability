@@ -1,4 +1,3 @@
-//Vyas-Faculty-Availability\src\components\selectors\FreeRooms.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -292,43 +291,58 @@ export default function FreeRooms({
     return hourlySlots;
   }, [filteredRooms, bookingsByRoom]);
 
+  const scrollToTopIfMobile = () => {
+    if (typeof window === "undefined") return;
+
+    // Tailwind md = 768px
+    if (window.innerWidth < 768) {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
+  };
+
   const handleRoomClick = (room: RoomWithFloor) => {
     setDialogOpen(false);
     // Use the onRoomSelect callback to select the room
     if (onRoomSelect) {
       onRoomSelect(room);
     }
+    scrollToTopIfMobile();
   };
 
   if (compactTrigger) {
     return (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant='outline' size='sm'>
-            <Search className='h-4 w-4 mr-2' />
+          <Button variant="outline" size="sm">
+            <Search className="h-4 w-4 mr-2" />
             Find Free Rooms
           </Button>
         </DialogTrigger>
-        <DialogContent className='w-[95vw] max-w-4xl max-h-[90vh] rounded-2xl overflow-y-auto p-4 sm:p-6'>
-          <DialogHeader className='mb-4'>
-            <DialogTitle className='flex items-center space-x-2 text-lg sm:text-xl'>
-              <Clock className='h-5 w-5 text-blue-600' />
+
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] rounded-2xl overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="flex items-center space-x-2 text-lg sm:text-xl">
+              <Clock className="h-5 w-5 text-blue-600" />
               <span>Free Rooms by Hour</span>
             </DialogTitle>
-            <DialogDescription className='text-sm'>
+            <DialogDescription className="text-sm">
               Showing all rooms that are free in each time slot from now until
               end of day
             </DialogDescription>
           </DialogHeader>
           {/* Filters */}
-          <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4'>
-            <div className='space-y-1'>
-              <label className='text-xs font-medium'>Building</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Building</label>
               <Select
                 value={selectedBuilding}
-                onValueChange={setSelectedBuilding}>
-                <SelectTrigger className='h-9'>
-                  <SelectValue placeholder='Any' />
+                onValueChange={setSelectedBuilding}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
                   {buildings.map((b) => (
@@ -339,45 +353,46 @@ export default function FreeRooms({
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-1'>
-              <label className='text-xs font-medium'>Room type</label>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Room type</label>
               <Select value={filterRoomType} onValueChange={setFilterRoomType}>
-                <SelectTrigger className='h-9'>
-                  <SelectValue placeholder='Any' />
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='any'>Any</SelectItem>
-                  <SelectItem value='classroom'>Classroom</SelectItem>
-                  <SelectItem value='lab'>Laboratory</SelectItem>
-                  <SelectItem value='conference'>Conference</SelectItem>
-                  <SelectItem value='auditorium'>Auditorium</SelectItem>
-                  <SelectItem value='seminar'>Seminar</SelectItem>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="classroom">Classroom</SelectItem>
+                  <SelectItem value="lab">Laboratory</SelectItem>
+                  <SelectItem value="conference">Conference</SelectItem>
+                  <SelectItem value="auditorium">Auditorium</SelectItem>
+                  <SelectItem value="seminar">Seminar</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-1'>
-              <label className='text-xs font-medium'>Min capacity</label>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Min capacity</label>
               <Select
                 value={filterMinCapacity}
-                onValueChange={setFilterMinCapacity}>
-                <SelectTrigger className='h-9'>
-                  <SelectValue placeholder='Any' />
+                onValueChange={setFilterMinCapacity}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='any'>Any</SelectItem>
-                  <SelectItem value='20'>20+</SelectItem>
-                  <SelectItem value='30'>30+</SelectItem>
-                  <SelectItem value='50'>50+</SelectItem>
-                  <SelectItem value='100'>100+</SelectItem>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="20">20+</SelectItem>
+                  <SelectItem value="30">30+</SelectItem>
+                  <SelectItem value="50">50+</SelectItem>
+                  <SelectItem value="100">100+</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <div className='space-y-3'>
+          <div className="space-y-3">
             {getFreeRoomsFromNow.length === 0 ? (
-              <div className='text-center py-8'>
-                <Clock className='h-12 w-12 text-gray-400 mx-auto mb-4' />
-                <p className='text-sm text-gray-500 dark:text-gray-400 font-medium'>
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                   No free rooms available for the rest of the day
                 </p>
               </div>
@@ -385,51 +400,53 @@ export default function FreeRooms({
               getFreeRoomsFromNow.map(({ hour, rooms }) => (
                 <div
                   key={hour}
-                  className='flex flex-col p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200'>
-                  <div className='flex items-center space-x-3 mb-3'>
-                    <div className='w-3 h-3 bg-green-500 rounded-full animate-pulse'></div>
+                  className="flex flex-col p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                     <div>
-                      <h3 className='text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                         {hour}
                       </h3>
-                      <p className='text-xs sm:text-sm text-gray-500 dark:text-gray-400'>
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         {rooms.length} room{rooms.length !== 1 ? "s" : ""}{" "}
                         available
                       </p>
                     </div>
                   </div>
-                  <div className='flex flex-wrap gap-2'>
+                  <div className="flex flex-wrap gap-2">
                     {rooms.slice(0, 3).map((room) => (
                       <div
                         key={room.id}
-                        className='px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer group'
-                        onClick={() => handleRoomClick(room)}>
-                        <div className='flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0'>
-                          <span className='text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 group-hover:text-blue-800 dark:group-hover:text-blue-200'>
+                        className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer group"
+                        onClick={() => handleRoomClick(room)}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0">
+                          <span className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 group-hover:text-blue-800 dark:group-hover:text-blue-200">
                             {room.name}
                           </span>
-                          <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                            <Building2 className='h-3 w-3' />
-                            <span className='hidden sm:inline'>
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <Building2 className="h-3 w-3" />
+                            <span className="hidden sm:inline">
                               {room.floor.building.name}
                             </span>
-                            <span className='sm:hidden'>
+                            <span className="sm:hidden">
                               {room.floor.building.name.split(" ")[0]}
                             </span>
                           </div>
-                          <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                            <MapPin className='h-3 w-3' />
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <MapPin className="h-3 w-3" />
                             <span>{room.floor.name}</span>
                           </div>
-                          <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                            <Users className='h-3 w-3' />
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                            <Users className="h-3 w-3" />
                             <span>{room.capacity || "N/A"}</span>
                           </div>
                         </div>
                       </div>
                     ))}
                     {rooms.length > 3 && (
-                      <div className='px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium'>
+                      <div className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium">
                         +{rooms.length - 3} more rooms
                       </div>
                     )}
@@ -444,13 +461,13 @@ export default function FreeRooms({
   }
 
   return (
-    <Card className='shadow-lg border-0 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-hidden'>
-      <CardHeader className='pb-6 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white'>
-        <CardTitle className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xl font-bold'>
+    <Card className="shadow-lg border-0 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
+      <CardHeader className="pb-6 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white">
+        <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xl font-bold">
           {/* Left section */}
-          <div className='flex items-center gap-3'>
-            <div className='p-2.5 bg-white/20 rounded-xl backdrop-blur-sm shrink-0'>
-              <Clock className='h-6 w-6' />
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm shrink-0">
+              <Clock className="h-6 w-6" />
             </div>
             <span>Find Free Rooms</span>
           </div>
@@ -458,33 +475,35 @@ export default function FreeRooms({
           {/* Right section */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <Button
-              size='sm'
+              size="sm"
               onClick={() => setDialogOpen(true)}
-              className='bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm'>
-              <Search className='h-4 w-4 mr-2' />
+              className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
+            >
+              <Search className="h-4 w-4 mr-2" />
               Find All Free
             </Button>
 
-            <DialogContent className='w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6'>
-              <DialogHeader className='mb-4'>
-                <DialogTitle className='flex items-center space-x-2 text-lg sm:text-xl'>
-                  <Clock className='h-5 w-5 text-blue-600' />
+            <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+              <DialogHeader className="mb-4">
+                <DialogTitle className="flex items-center space-x-2 text-lg sm:text-xl">
+                  <Clock className="h-5 w-5 text-blue-600" />
                   <span>Free Rooms by Hour</span>
                 </DialogTitle>
-                <DialogDescription className='text-sm'>
+                <DialogDescription className="text-sm">
                   Showing all rooms that are free in each time slot from now
                   until end of day
                 </DialogDescription>
               </DialogHeader>
               {/* Filters */}
-              <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4'>
-                <div className='space-y-1'>
-                  <label className='text-xs font-medium'>Building</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Building</label>
                   <Select
                     value={selectedBuilding}
-                    onValueChange={setSelectedBuilding}>
-                    <SelectTrigger className='h-9'>
-                      <SelectValue placeholder='Any' />
+                    onValueChange={setSelectedBuilding}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
                       {buildings.map((b) => (
@@ -495,47 +514,49 @@ export default function FreeRooms({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className='space-y-1'>
-                  <label className='text-xs font-medium'>Room type</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Room type</label>
                   <Select
                     value={filterRoomType}
-                    onValueChange={setFilterRoomType}>
-                    <SelectTrigger className='h-9'>
-                      <SelectValue placeholder='Any' />
+                    onValueChange={setFilterRoomType}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='any'>Any</SelectItem>
-                      <SelectItem value='classroom'>Classroom</SelectItem>
-                      <SelectItem value='lab'>Laboratory</SelectItem>
-                      <SelectItem value='conference'>Conference</SelectItem>
-                      <SelectItem value='auditorium'>Auditorium</SelectItem>
-                      <SelectItem value='seminar'>Seminar</SelectItem>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="classroom">Classroom</SelectItem>
+                      <SelectItem value="lab">Laboratory</SelectItem>
+                      <SelectItem value="conference">Conference</SelectItem>
+                      <SelectItem value="auditorium">Auditorium</SelectItem>
+                      <SelectItem value="seminar">Seminar</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className='space-y-1'>
-                  <label className='text-xs font-medium'>Min capacity</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Min capacity</label>
                   <Select
                     value={filterMinCapacity}
-                    onValueChange={setFilterMinCapacity}>
-                    <SelectTrigger className='h-9'>
-                      <SelectValue placeholder='Any' />
+                    onValueChange={setFilterMinCapacity}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='any'>Any</SelectItem>
-                      <SelectItem value='20'>20+</SelectItem>
-                      <SelectItem value='30'>30+</SelectItem>
-                      <SelectItem value='50'>50+</SelectItem>
-                      <SelectItem value='100'>100+</SelectItem>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="20">20+</SelectItem>
+                      <SelectItem value="30">30+</SelectItem>
+                      <SelectItem value="50">50+</SelectItem>
+                      <SelectItem value="100">100+</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className='space-y-3'>
+              <div className="space-y-3">
                 {getFreeRoomsFromNow.length === 0 ? (
-                  <div className='text-center py-8'>
-                    <Clock className='h-12 w-12 text-gray-400 mx-auto mb-4' />
-                    <p className='text-sm text-gray-500 dark:text-gray-400 font-medium'>
+                  <div className="text-center py-8">
+                    <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                       No free rooms available for the rest of the day
                     </p>
                   </div>
@@ -543,51 +564,53 @@ export default function FreeRooms({
                   getFreeRoomsFromNow.map(({ hour, rooms }) => (
                     <div
                       key={hour}
-                      className='flex flex-col p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200'>
-                      <div className='flex items-center space-x-3 mb-3'>
-                        <div className='w-3 h-3 bg-green-500 rounded-full animate-pulse'></div>
+                      className="flex flex-col p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                         <div>
-                          <h3 className='text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                             {hour}
                           </h3>
-                          <p className='text-xs sm:text-sm text-gray-500 dark:text-gray-400'>
+                          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                             {rooms.length} room{rooms.length !== 1 ? "s" : ""}{" "}
                             available
                           </p>
                         </div>
                       </div>
-                      <div className='flex flex-wrap gap-2'>
+                      <div className="flex flex-wrap gap-2">
                         {rooms.slice(0, 3).map((room) => (
                           <div
                             key={room.id}
-                            className='px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer group'
-                            onClick={() => handleRoomClick(room)}>
-                            <div className='flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0'>
-                              <span className='text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 group-hover:text-blue-800 dark:group-hover:text-blue-200'>
+                            className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer group"
+                            onClick={() => handleRoomClick(room)}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0">
+                              <span className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300 group-hover:text-blue-800 dark:group-hover:text-blue-200">
                                 {room.name}
                               </span>
-                              <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                                <Building2 className='h-3 w-3' />
-                                <span className='hidden sm:inline'>
+                              <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                                <Building2 className="h-3 w-3" />
+                                <span className="hidden sm:inline">
                                   {room.floor.building.name}
                                 </span>
-                                <span className='sm:hidden'>
+                                <span className="sm:hidden">
                                   {room.floor.building.name.split(" ")[0]}
                                 </span>
                               </div>
-                              <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                                <MapPin className='h-3 w-3' />
+                              <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                                <MapPin className="h-3 w-3" />
                                 <span>{room.floor.name}</span>
                               </div>
-                              <div className='flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400'>
-                                <Users className='h-3 w-3' />
+                              <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400">
+                                <Users className="h-3 w-3" />
                                 <span>{room.capacity || "N/A"}</span>
                               </div>
                             </div>
                           </div>
                         ))}
                         {rooms.length > 3 && (
-                          <div className='px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium'>
+                          <div className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium">
                             +{rooms.length - 3} more rooms
                           </div>
                         )}
@@ -600,21 +623,21 @@ export default function FreeRooms({
           </Dialog>
         </CardTitle>
       </CardHeader>
-      <CardContent className='space-y-8 p-6'>
+      <CardContent className="space-y-8 p-6">
         {/* Building Selector */}
-        <div className='space-y-4'>
-          <label className='text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide'>
+        <div className="space-y-4">
+          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
             Select Building
           </label>
           <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-            <SelectTrigger className=' w-[92%]  h-12 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400'>
-              <SelectValue placeholder='Select a building' />
+            <SelectTrigger className=" w-[92%]  h-12 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+              <SelectValue placeholder="Select a building" />
             </SelectTrigger>
             <SelectContent>
               {buildings.map((building) => (
                 <SelectItem key={building.id} value={building.id}>
-                  <div className='flex items-center space-x-2'>
-                    <Building2 className='h-4 w-4' />
+                  <div className="flex items-center space-x-2">
+                    <Building2 className="h-4 w-4" />
                     <span>{building.name}</span>
                   </div>
                 </SelectItem>
@@ -662,31 +685,31 @@ export default function FreeRooms({
 
         {/* Custom Time Input */}
         {preset === "custom" && (
-          <div className='p-5 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600'>
-            <label className='text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 block'>
+          <div className="p-5 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 block">
               Custom Time Window
             </label>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div className='space-y-2'>
-                <label className='text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide'>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                   Start Time
                 </label>
                 <Input
-                  type='datetime-local'
+                  type="datetime-local"
                   value={customStart}
                   onChange={(e) => setCustomStart(e.target.value)}
-                  className='h-11 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400'
+                  className="h-11 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400"
                 />
               </div>
-              <div className='space-y-2'>
-                <label className='text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide'>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                   End Time
                 </label>
                 <Input
-                  type='datetime-local'
+                  type="datetime-local"
                   value={customEnd}
                   onChange={(e) => setCustomEnd(e.target.value)}
-                  className='h-11 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400'
+                  className="h-11 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400"
                 />
               </div>
             </div>
