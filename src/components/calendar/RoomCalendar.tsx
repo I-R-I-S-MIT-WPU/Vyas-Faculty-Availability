@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { Room, Booking, Floor, Building } from "@/types/database";
+import { Link } from "react-router-dom";
+import { apiClient } from "@/lib/apiClient";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { Room, Booking, Floor, Building } from "@/types/api";
 import { useAuth } from "@/hooks/useAuth";
 import {
   format,
@@ -178,13 +180,11 @@ export default function RoomCalendar({
   useEffect(() => {
     if (user) {
       const fetchUserProfile = async () => {
-        const { data } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", user.id)
-          .single();
-        if (data) {
-          setUserProfile(data);
+        const { user: profile } = await apiClient.get<{ success: boolean; user: { full_name: string } }>(
+          "/user/me",
+        );
+        if (profile) {
+          setUserProfile(profile);
         }
       };
       fetchUserProfile();
@@ -192,23 +192,19 @@ export default function RoomCalendar({
   }, [user]);
 
   useEffect(() => {
-    if (selectedRoom) {
+    if (selectedRoom && user) {
       fetchEffectiveTimetable();
     }
-  }, [currentWeek, selectedRoom]);
+  }, [currentWeek, selectedRoom, user]);
 
   useEffect(() => {
     // Fetch buildings once for discovery view
     const fetchBuildings = async () => {
       try {
-        const { data, error } = await (supabase as any)
-          .from("buildings")
-          .select("*")
-          .eq("is_active", true)
-          .order("name");
-        if (error) throw error;
-        const list = (data || []) as Building[];
-        setBuildings(list);
+        const { buildings: list } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+          "/buildings",
+        );
+        setBuildings(list || []);
         // Default to Vyas if present
         const vyas = list.find((b) => b.name?.toLowerCase() === "vyas");
         setSelectedBuildingId((vyas || list[0])?.id || "");
@@ -225,13 +221,10 @@ export default function RoomCalendar({
     const fetchFloors = async () => {
       if (!selectedBuildingId) return;
       try {
-        const { data, error } = await (supabase as any)
-          .from("floors")
-          .select(`*, rooms (*), building:buildings(*)`)
-          .eq("building_id", selectedBuildingId)
-          .order("number");
-        if (error) throw error;
-        setFloors((data as any) || []);
+        const { floors: list } = await apiClient.get<{ success: boolean; floors: any[] }>(
+          `/buildings/${selectedBuildingId}/floors`,
+        );
+        setFloors(list || []);
       } catch (e) {
         console.error("Error loading floors", e);
       }
@@ -244,7 +237,7 @@ export default function RoomCalendar({
   const fetchEffectiveTimetable = async (
     options: { silent?: boolean } = {},
   ) => {
-    if (!selectedRoom) return [];
+    if (!selectedRoom || !user) return [];
 
     if (!options.silent) {
       setLoading(true);
@@ -254,129 +247,17 @@ export default function RoomCalendar({
       // Calculate week start (Monday)
       const weekStartDate = format(weekStart, "yyyy-MM-dd");
 
-      // DEBUG: Fetch all templates directly from database to compare
-      const { data: allTemplates, error: templatesError } = await (
-        supabase as any
-      )
-        .from("room_timetable_templates")
-        .select("*")
-        .eq("room_id", selectedRoom.id)
-        .eq("is_active", true);
-
-      // DEBUG: Check for exceptions that might cancel templates
-      const { data: exceptions, error: exceptionsError } = await (
-        supabase as any
-      )
-        .from("room_timetable_template_exceptions")
-        .select("*")
-        .eq("week_start_date", weekStartDate);
-
-      if (!templatesError && allTemplates) {
-        console.log("🔍 ALL ACTIVE TEMPLATES IN DATABASE:", {
-          count: allTemplates.length,
-          templates: allTemplates.map((t: any) => {
-            // Calculate if this template should show this week
-            const templateWeekday = t.weekday;
-            const weekHasThisWeekday = weekDays.some((d) => {
-              const dWeekday = d.getDay() === 0 ? 6 : d.getDay() - 1;
-              return dWeekday === templateWeekday;
-            });
-
-            // Check repeat interval
-            const weekDiff = Math.floor(
-              (weekStart.getTime() - new Date(t.effective_from).getTime()) /
-                (7 * 24 * 60 * 60 * 1000),
-            );
-            const shouldShowByRepeat =
-              t.repeat_interval_weeks === 1 ||
-              weekDiff % t.repeat_interval_weeks === 0;
-
-            // Check if cancelled
-            const isCancelled = exceptions?.some(
-              (e: any) => e.template_id === t.id,
-            );
-
-            return {
-              id: t.id,
-              title: t.title,
-              weekday: t.weekday,
-              start_time: t.start_time,
-              effective_from: t.effective_from,
-              repeat_interval_weeks: t.repeat_interval_weeks,
-              teacher: t.teacher_name,
-              shouldShow:
-                weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
-              weekHasWeekday: weekHasThisWeekday,
-              shouldShowByRepeat,
-              isCancelled,
-              weekDiff,
-            };
-          }),
-          currentWeekStart: weekStartDate,
-          weekDays: weekDays.map((d) => ({
-            date: format(d, "yyyy-MM-dd"),
-            weekday: d.getDay() === 0 ? 6 : d.getDay() - 1, // Convert to 0-6 (Mon-Sun)
-          })),
-          exceptions: exceptions || [],
-        });
-      }
-
-      // Call the effective timetable function
-      const { data, error } = await (supabase as any).rpc(
-        "get_effective_timetable",
-        {
-          p_room_id: selectedRoom.id,
-          p_week_start: weekStartDate,
-        },
+      const { slots } = await apiClient.get<{ success: boolean; slots: any[] }>(
+        `/room/${selectedRoom.id}/effective-timetable?weekStart=${weekStartDate}`,
       );
-
-      if (error) {
-        console.error("Effective timetable error:", error);
-        throw error;
-      }
-
-      const timetable = (data || []) as any[];
-      const templates = timetable.filter((s) => s.slot_type === "template");
-      console.log("✅ EFFECTIVE TIMETABLE FROM SQL FUNCTION:", {
-        count: timetable.length,
-        templateCount: templates.length,
-        templates: templates.map((t) => ({
-          id: t.template_id,
-          title: t.title,
-          start_time: t.start_time,
-          teacher: t.teacher_name,
-          weekday:
-            new Date(t.start_time).getDay() === 0
-              ? 6
-              : new Date(t.start_time).getDay() - 1,
-        })),
-        bookings: timetable.filter((s) => s.slot_type === "booking").length,
-        cancelled: timetable.filter(
-          (s) => s.slot_type === "exception_cancelled",
-        ).length,
-        weekStart: weekStartDate,
-      });
+      const timetable = slots || [];
       setEffectiveTimetable(timetable);
 
       // Also fetch regular bookings for the sidebar/details view
-      const { data: bookingsData, error: bookingsError } = await (
-        supabase as any
-      )
-        .from("bookings")
-        .select(
-          `
-          *,
-          profiles:profiles!bookings_teacher_id_fkey(full_name, email)
-        `,
-        )
-        .eq("room_id", selectedRoom.id)
-        .eq("status", "confirmed")
-        .gte("start_time", weekStart.toISOString())
-        .lte("start_time", weekEnd.toISOString());
-
-      if (bookingsError) throw bookingsError;
-      const list = (bookingsData || []) as Booking[];
-      setBookings(list);
+      const { bookings: bookingsData } = await apiClient.get<{ success: boolean; bookings: Booking[] }>(
+        `/booking/room/${selectedRoom.id}?weekStart=${weekStart.toISOString()}&weekEnd=${weekEnd.toISOString()}`,
+      );
+      setBookings(bookingsData || []);
 
       return timetable;
     } catch (error) {
@@ -396,6 +277,26 @@ export default function RoomCalendar({
 
   // Keep fetchBookings for backward compatibility
   const fetchBookings = fetchEffectiveTimetable;
+
+  // Keep the calendar live: refresh when another user books/cancels in this room.
+  const fetchEffectiveTimetableRef = useRef(fetchEffectiveTimetable);
+  fetchEffectiveTimetableRef.current = fetchEffectiveTimetable;
+
+  useEffect(() => {
+    if (!selectedRoom || !user) return;
+
+    const socket = connectSocket();
+    socket.emit("join:room", selectedRoom.id);
+    const handleLiveUpdate = () => fetchEffectiveTimetableRef.current({ silent: true });
+    socket.on("room:booked", handleLiveUpdate);
+    socket.on("booking:cancelled", handleLiveUpdate);
+
+    return () => {
+      socket.off("room:booked", handleLiveUpdate);
+      socket.off("booking:cancelled", handleLiveUpdate);
+      disconnectSocket();
+    };
+  }, [selectedRoom?.id, user]);
 
   const getSlotForTime = (day: Date, timeSlot: string) => {
     // Create the time slot window (1 hour slot) in local time
@@ -691,6 +592,20 @@ export default function RoomCalendar({
             )}
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center px-4">
+        <AlertCircle className="h-10 w-10 text-muted-foreground" />
+        <p className="text-muted-foreground">
+          Sign in to view {selectedRoom.name}'s schedule and make a booking.
+        </p>
+        <Link to="/auth">
+          <Button size="sm">Sign In</Button>
+        </Link>
       </div>
     );
   }

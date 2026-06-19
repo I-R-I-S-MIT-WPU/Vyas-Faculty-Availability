@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient, ApiError } from "@/lib/apiClient";
 import { format, startOfWeek } from "date-fns";
 
 interface TemplateExceptionDialogProps {
@@ -43,13 +43,10 @@ export default function TemplateExceptionDialog({
       // Calculate week start (Monday)
       const weekStartDate = format(startOfWeek(weekStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
 
-      const { error } = await (supabase as any).rpc("create_template_exception", {
-        p_template_id: templateId,
-        p_week_start_date: weekStartDate,
-        p_reason: reason.trim() || null,
+      await apiClient.post(`/timetable/${templateId}/exception`, {
+        weekStartDate,
+        reason: reason.trim() || undefined,
       });
-
-      if (error) throw error;
 
       toast({
         title: "Class cancelled",
@@ -59,11 +56,11 @@ export default function TemplateExceptionDialog({
       onExceptionCreated?.();
       onOpenChange(false);
       setReason("");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error creating exception:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to cancel class for this week",
+        description: error instanceof ApiError ? error.message : "Failed to cancel class for this week",
         variant: "destructive",
       });
     } finally {

@@ -1,54 +1,90 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import {
+  getCurrentUser,
+  signIn as signInRequest,
+  signUp as signUpRequest,
+  signOut as signOutRequest,
+  StoredUser,
+} from "@/lib/auth";
+import { ApiError } from "@/lib/apiClient";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  full_name: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  isAdmin: boolean;
+  token: string | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: ApiError | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: ApiError | null }>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  session: null,
+  isAdmin: false,
+  token: null,
   loading: true,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signOut: async () => {},
 });
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
 
+function toAuthUser(stored: StoredUser | null): AuthUser | null {
+  if (!stored) return null;
+  return { id: stored.id, email: stored.email, full_name: stored.full_name };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [stored, setStored] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    setStored(getCurrentUser());
+    setLoading(false);
   }, []);
 
+  const signIn = async (email: string, password: string) => {
+    const { error } = await signInRequest(email, password);
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const { error } = await signUpRequest(email, password, fullName);
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const signOut = async () => {
+    await signOutRequest();
+    setStored(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider
+      value={{
+        user: toAuthUser(stored),
+        isAdmin: stored?.is_admin ?? false,
+        token: stored?.token ?? null,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

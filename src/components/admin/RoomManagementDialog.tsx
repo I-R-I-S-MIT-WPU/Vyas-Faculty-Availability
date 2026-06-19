@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Room, Floor, RoomTimetableTemplate } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Room, Floor, RoomTimetableTemplate } from "@/types/api";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +79,6 @@ export const RoomManagementDialog = ({
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(
     null,
   );
-  const supabaseAdmin = supabase as any;
 
   const getDefaultEffectiveFrom = () => {
     const today = new Date();
@@ -135,18 +134,10 @@ export const RoomManagementDialog = ({
 
   const fetchFloors = async () => {
     try {
-      const { data, error } = await supabase
-        .from("floors")
-        .select(
-          `
-          *,
-          building:buildings(*)
-        `,
-        )
-        .order("number");
-
-      if (error) throw error;
-      setFloors(data || []);
+      const { floors: list } = await apiClient.get<{ success: boolean; floors: Floor[] }>(
+        "/buildings/all-floors",
+      );
+      setFloors(list || []);
     } catch (error) {
       console.error("Error fetching floors:", error);
       toast({
@@ -171,23 +162,17 @@ export const RoomManagementDialog = ({
     try {
       const roomData = {
         name: formData.name.trim(),
-        floor_id: formData.floor_id,
         room_type: formData.room_type,
         capacity: formData.capacity ? parseInt(formData.capacity) : null,
         equipment: formData.equipment.length > 0 ? formData.equipment : null,
         is_active: formData.is_active,
         requires_approval: formData.requires_approval,
-        updated_at: new Date().toISOString(),
       };
 
       if (room) {
-        // Update existing room
-        const { error } = await supabase
-          .from("rooms")
-          .update(roomData)
-          .eq("id", room.id);
-
-        if (error) throw error;
+        // Update existing room (NOTE: backend's PUT /buildings/room/:id doesn't support
+        // moving a room to a different floor — floor_id changes here won't take effect)
+        await apiClient.put(`/buildings/room/${room.id}`, roomData);
 
         toast({
           title: "Success",
@@ -195,9 +180,7 @@ export const RoomManagementDialog = ({
         });
       } else {
         // Create new room
-        const { error } = await supabase.from("rooms").insert([roomData]);
-
-        if (error) throw error;
+        await apiClient.post(`/buildings/floor/${formData.floor_id}/room`, roomData);
 
         toast({
           title: "Success",
@@ -242,15 +225,11 @@ export const RoomManagementDialog = ({
   const fetchTemplates = async (roomId: string) => {
     try {
       setTemplatesLoading(true);
-      const { data, error } = await supabaseAdmin
-        .from("room_timetable_templates")
-        .select("*")
-        .eq("room_id", roomId)
-        .order("weekday", { ascending: true })
-        .order("start_time", { ascending: true });
-
-      if (error) throw error;
-      setTemplates((data as RoomTimetableTemplate[]) || []);
+      const { templates: list } = await apiClient.get<{
+        success: boolean;
+        templates: RoomTimetableTemplate[];
+      }>(`/room/${roomId}/timetable`);
+      setTemplates(list || []);
     } catch (error) {
       console.error("Error fetching templates:", error);
       toast({
@@ -319,44 +298,26 @@ export const RoomManagementDialog = ({
 
     setTemplateActionLoading(true);
     try {
-      if (editingTemplateId) {
-        const { error } = await supabaseAdmin
-          .from("room_timetable_templates")
-          .update({
-            teacher_name: templateForm.teacher_name.trim(),
-            title: templateForm.title.trim(),
-            weekday,
-            start_time: startTimeValue,
-            duration_minutes: durationMinutes,
-            repeat_interval_weeks: repeatInterval,
-            effective_from: templateForm.effective_from,
-            notes: templateForm.notes.trim() ? templateForm.notes.trim() : null,
-          })
-          .eq("id", editingTemplateId);
+      const payload = {
+        teacherName: templateForm.teacher_name.trim(),
+        title: templateForm.title.trim(),
+        weekday,
+        startTime: startTimeValue,
+        durationMinutes,
+        repeatIntervalWeeks: repeatInterval,
+        effectiveFrom: templateForm.effective_from,
+        notes: templateForm.notes.trim() ? templateForm.notes.trim() : undefined,
+      };
 
-        if (error) throw error;
+      if (editingTemplateId) {
+        await apiClient.put(`/timetable/${editingTemplateId}`, payload);
 
         toast({
           title: "Template updated",
           description: "The timetable slot has been updated.",
         });
       } else {
-        const { error } = await supabaseAdmin
-          .from("room_timetable_templates")
-          .insert({
-            room_id: room.id,
-            teacher_name: templateForm.teacher_name.trim(),
-            title: templateForm.title.trim(),
-            weekday,
-            start_time: startTimeValue,
-            duration_minutes: durationMinutes,
-            repeat_interval_weeks: repeatInterval,
-            effective_from: templateForm.effective_from,
-            notes: templateForm.notes.trim() ? templateForm.notes.trim() : null,
-            created_by: currentUserId ?? null,
-          });
-
-        if (error) throw error;
+        await apiClient.post(`/room/${room.id}/timetable`, payload);
 
         toast({
           title: "Template added",
@@ -385,12 +346,7 @@ export const RoomManagementDialog = ({
   ) => {
     try {
       setTemplateActionLoading(true);
-      const { error } = await supabaseAdmin
-        .from("room_timetable_templates")
-        .update({ is_active: nextActive })
-        .eq("id", template.id);
-
-      if (error) throw error;
+      await apiClient.put(`/timetable/${template.id}`, { isActive: nextActive });
 
       setTemplates((prev) =>
         prev.map((item) =>
@@ -419,12 +375,7 @@ export const RoomManagementDialog = ({
 
     try {
       setTemplateActionLoading(true);
-      const { error } = await supabaseAdmin
-        .from("room_timetable_templates")
-        .delete()
-        .eq("id", templateId);
-
-      if (error) throw error;
+      await apiClient.del(`/timetable/${templateId}`);
 
       toast({
         title: "Template removed",
@@ -503,7 +454,7 @@ export const RoomManagementDialog = ({
               <SelectContent>
                 {floors.map((floor) => (
                   <SelectItem key={floor.id} value={floor.id}>
-                    {floor.name} - {floor.building?.name || "No Building"}
+                    {floor.name} - {floor.building_name || "No Building"}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { Booking, Room } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Booking, Room, MyBookingsResponse } from "@/types/api";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -50,64 +50,15 @@ const Dashboard = () => {
         return;
       }
 
-      // First, get the user's full name from profiles
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .single();
-      
-      const fullName = profile?.full_name?.trim() || null;
-
-      // Fetch bookings where user is the teacher
-      const { data: teacherBookings, error: teacherError } = await supabase
-        .from("bookings")
-        .select(
-          `
-          *,
-          room:rooms(*),
-          owner:profiles!bookings_teacher_id_fkey(full_name)
-        `
-        )
-        .eq("teacher_id", user.id)
-        .order("start_time", { ascending: true });
-
-      if (teacherError) throw teacherError;
-
-      // Fetch bookings where template_teacher_name matches (if we have a full name)
-      let templateBookings: any[] = [];
-      if (fullName) {
-        const { data: templateData, error: templateError } = await supabase
-          .from("bookings")
-          .select(
-            `
-            *,
-            room:rooms(*),
-            owner:profiles!bookings_teacher_id_fkey(full_name)
-          `
-          )
-          .ilike("template_teacher_name", `%${fullName}%`)
-          .order("start_time", { ascending: true });
-
-        if (templateError) {
-          console.warn("Error fetching template bookings:", templateError);
-      } else {
-          templateBookings = templateData || [];
-        }
-      }
-
-      // Combine and deduplicate bookings
-      const allBookings = [...(teacherBookings || []), ...templateBookings];
-      const uniqueBookings = Array.from(
-        new Map(allBookings.map((booking) => [booking.id, booking])).values()
-      ) as Booking[];
-
-      // Sort by start_time
-      uniqueBookings.sort((a, b) => 
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      // NOTE: unlike the old Supabase query, this won't include template-generated
+      // bookings matched by teacher name — there's no backend equivalent for that join.
+      const { upcoming, past } = await apiClient.get<MyBookingsResponse>("/booking/my");
+      const combined = [...(upcoming || []), ...(past || [])];
+      combined.sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
       );
 
-      setBookings(uniqueBookings);
+      setBookings(combined);
     } catch (error) {
       console.error("Error fetching bookings:", error);
       toast({
@@ -123,30 +74,17 @@ const Dashboard = () => {
   const cancelBooking = async (booking: Booking) => {
     try {
       if (booking.template_id && booking.generated_for_week) {
-        const { error: exceptionError } = await (supabase as any)
-          .from("room_timetable_template_exceptions")
-          .upsert(
-            {
-              template_id: booking.template_id,
-              week_start_date: booking.generated_for_week,
-              resolved_booking_id: booking.id,
-              reason: "cancelled_by_teacher",
-              created_by: user?.id ?? null,
-            },
-            { onConflict: "template_id,week_start_date" }
-          );
-
-        if (exceptionError) {
+        try {
+          await apiClient.post(`/timetable/${booking.template_id}/exception`, {
+            weekStartDate: booking.generated_for_week,
+            reason: "cancelled_by_teacher",
+          });
+        } catch (exceptionError) {
           console.warn("Failed to record template exception", exceptionError);
         }
       }
 
-      const { error } = await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", booking.id);
-
-      if (error) throw error;
+      await apiClient.del(`/booking/${booking.id}`);
 
       toast({
         title: "Success",
@@ -279,7 +217,7 @@ const Dashboard = () => {
                           </CardTitle>
                           <CardDescription className="flex items-center mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {booking.room?.name} • {booking.room?.floor?.name}
+                            {booking.room_name}
                           </CardDescription>
                         </div>
                         <Badge variant={getBookingStatus(booking).variant}>
@@ -394,7 +332,7 @@ const Dashboard = () => {
                           </CardTitle>
                           <CardDescription className="flex items-center mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {booking.room?.name} • {booking.room?.floor?.name}
+                            {booking.room_name}
                           </CardDescription>
                         </div>
                         <Badge variant={getBookingStatus(booking).variant}>

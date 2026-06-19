@@ -25,8 +25,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Booking, Room } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { getBookingErrorMessage } from "@/lib/bookingErrors";
+import { Booking, Room } from "@/types/api";
 import {
   Calendar,
   Clock,
@@ -192,61 +193,6 @@ export default function BookingDetailsSidebar({
     return null;
   };
 
-  const checkBookingCollision = async (
-    startDate: Date,
-    endDate: Date
-  ): Promise<boolean> => {
-    if (!booking || !room) return false;
-    try {
-      // Use the effective timetable function to check availability
-      const { data, error } = await (supabase as any).rpc(
-        "check_slot_availability",
-        {
-          p_room_id: room.id,
-          p_start_time: startDate.toISOString(),
-          p_end_time: endDate.toISOString(),
-          p_exclude_booking_id: booking.id,
-        }
-      );
-
-      if (error) {
-        console.error("Collision check failed", error);
-        return false;
-      }
-
-      // Function returns true if available, false if not
-      return !data;
-    } catch (error) {
-      console.error("Error checking booking collision:", error);
-      return false;
-    }
-  };
-
-  const checkUserConflict = async (
-    startDate: Date,
-    endDate: Date
-  ): Promise<boolean> => {
-    if (!booking || !currentUserId) return false;
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("id, start_time, end_time")
-      .eq("teacher_id", currentUserId)
-      .eq("status", "confirmed")
-      .neq("id", booking.id);
-    if (error) {
-      console.error("User conflict check failed", error);
-      return false;
-    }
-
-    return (
-      data?.some((existing) => {
-        const existingStart = parseISO(existing.start_time);
-        const existingEnd = parseISO(existing.end_time);
-        return startDate < existingEnd && endDate > existingStart;
-      }) || false
-    );
-  };
-
   const handleUpdate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!booking || !isOwner) return;
@@ -283,46 +229,15 @@ export default function BookingDetailsSidebar({
 
     setIsSaving(true);
     try {
-      const hasCollision = await checkBookingCollision(parsedStart, parsedEnd);
-      if (hasCollision) {
-        toast({
-          title: "Slot unavailable",
-          description: "This room already has a booking in that time window.",
-          variant: "destructive",
-        });
-        setIsSaving(false);
-        return;
-      }
-
-      const hasUserConflict = await checkUserConflict(parsedStart, parsedEnd);
-      if (hasUserConflict) {
-        toast({
-          title: "Schedule conflict",
-          description:
-            "You already have a booking that overlaps with this time.",
-          variant: "destructive",
-        });
-        setIsSaving(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from("bookings")
-        .update({
-          title: formState.title.trim(),
-          description: formState.description.trim() || null,
-          class_division: formState.classDivision.trim() || null,
-          panel: formState.panel.trim() || null,
-          year_course: formState.yearCourse.trim() || null,
-          start_time: parsedStart.toISOString(),
-          end_time: parsedEnd.toISOString(),
-        })
-        .eq("id", booking.id)
-        .eq("teacher_id", currentUserId);
-
-      if (error) {
-        throw error;
-      }
+      await apiClient.patch(`/booking/${booking.id}`, {
+        title: formState.title.trim(),
+        description: formState.description.trim() || undefined,
+        class_division: formState.classDivision.trim() || undefined,
+        panel: formState.panel.trim() || undefined,
+        year_course: formState.yearCourse.trim() || undefined,
+        start_time: parsedStart.toISOString(),
+        end_time: parsedEnd.toISOString(),
+      });
 
       toast({
         title: "Booking updated",
@@ -330,13 +245,10 @@ export default function BookingDetailsSidebar({
       });
       setIsEditing(false);
       await onBookingUpdated?.(booking.id);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to update booking", err);
-      toast({
-        title: "Update failed",
-        description: err.message || "Could not update this booking.",
-        variant: "destructive",
-      });
+      const { title: errTitle, description: errDescription } = getBookingErrorMessage(err);
+      toast({ title: errTitle, description: errDescription, variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -346,12 +258,7 @@ export default function BookingDetailsSidebar({
     if (!booking || !isOwner) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", booking.id)
-        .eq("teacher_id", currentUserId);
-      if (error) throw error;
+      await apiClient.del(`/booking/${booking.id}`);
 
       toast({
         title: "Booking deleted",
@@ -359,11 +266,11 @@ export default function BookingDetailsSidebar({
       });
       await onBookingDeleted?.(booking.id);
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to delete booking", err);
       toast({
         title: "Delete failed",
-        description: err.message || "Could not remove this booking.",
+        description: err instanceof Error ? err.message : "Could not remove this booking.",
         variant: "destructive",
       });
     } finally {
@@ -384,16 +291,10 @@ export default function BookingDetailsSidebar({
     setIsCancellingTemplate(true);
     try {
       const weekStartDate = format(templateWeekStart, "yyyy-MM-dd");
-      const { error } = await (supabase as any).rpc(
-        "create_template_exception",
-        {
-          p_template_id: template.template_id,
-          p_week_start_date: weekStartDate,
-          p_reason: "Cancelled by teacher",
-        }
-      );
-
-      if (error) throw error;
+      await apiClient.post(`/timetable/${template.template_id}/exception`, {
+        weekStartDate,
+        reason: "Cancelled by teacher",
+      });
 
       toast({
         title: "Class cancelled",
@@ -401,11 +302,11 @@ export default function BookingDetailsSidebar({
       });
 
       await onTemplateCancelled?.();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to cancel template", err);
       toast({
         title: "Cancel failed",
-        description: err.message || "Could not cancel this class.",
+        description: err instanceof Error ? err.message : "Could not cancel this class.",
         variant: "destructive",
       });
     } finally {

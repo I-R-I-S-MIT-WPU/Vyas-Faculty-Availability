@@ -3,7 +3,7 @@ import Header from "@/components/layout/Header";
 import RoomCalendar from "@/components/calendar/RoomCalendar";
 import RoomSelector from "@/components/selectors/RoomSelector";
 import FreeRooms from "@/components/selectors/FreeRooms";
-import { Room } from "@/types/database";
+import { Room } from "@/types/api";
 
 const Index = () => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);

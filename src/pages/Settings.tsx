@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
-import { supabase } from "@/integrations/supabase/client";
-import { Profile } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Profile } from "@/types/api";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -59,13 +59,7 @@ const Settings = () => {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user?.id)
-        .single();
-
-      if (error) throw error;
+      const { user: data } = await apiClient.get<{ success: boolean; user: Profile }>("/user/me");
 
       setProfile(data);
       setFullName(data.full_name || "");
@@ -86,24 +80,16 @@ const Settings = () => {
     try {
       setSaving(true);
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          department: department,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user?.id);
-
-      if (error) throw error;
+      const { user: updated } = await apiClient.patch<{ success: boolean; user: Profile }>(
+        "/user/me",
+        { full_name: fullName, department: department || undefined },
+      );
+      setProfile(updated);
 
       toast({
         title: "Success",
         description: "Profile updated successfully",
       });
-
-      // Refresh profile data
-      fetchUserProfile();
     } catch (error) {
       console.error("Error updating profile:", error);
       toast({
@@ -341,11 +327,7 @@ const Settings = () => {
 
               <div className="space-y-2">
                 <Label>Last Sign In</Label>
-                <p className="text-sm text-muted-foreground">
-                  {user.last_sign_in_at
-                    ? new Date(user.last_sign_in_at).toLocaleString()
-                    : "Unknown"}
-                </p>
+                <p className="text-sm text-muted-foreground">Not available</p>
               </div>
 
               <Separator />

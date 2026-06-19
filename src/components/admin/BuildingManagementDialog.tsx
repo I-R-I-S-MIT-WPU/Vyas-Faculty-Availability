@@ -11,8 +11,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
-import { Building } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Building } from "@/types/api";
 import { Building2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,10 +35,10 @@ export default function BuildingManagementDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) {
+    if (!formData.name.trim() || !formData.address.trim() || !formData.description.trim()) {
       toast({
         title: "Error",
-        description: "Building name is required",
+        description: "Building name, address and description are required",
         variant: "destructive",
       });
       return;
@@ -47,17 +47,14 @@ export default function BuildingManagementDialog({
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("buildings")
-        .insert({
+      const { building: data } = await apiClient.post<{ success: boolean; building: Building }>(
+        "/buildings",
+        {
           name: formData.name.trim(),
-          address: formData.address.trim() || null,
-          description: formData.description.trim() || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+          address: formData.address.trim(),
+          description: formData.description.trim(),
+        },
+      );
 
       toast({
         title: "Success",
@@ -105,8 +102,8 @@ export default function BuildingManagementDialog({
             <span>Add New Building</span>
           </DialogTitle>
           <DialogDescription>
-            Add a new building to the system. All fields are optional except the
-            building name.
+            Add a new building to the system. Name, address and description are
+            all required.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
@@ -124,7 +121,7 @@ export default function BuildingManagementDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address">Address *</Label>
             <Input
               id="address"
               value={formData.address}
@@ -132,11 +129,12 @@ export default function BuildingManagementDialog({
                 setFormData({ ...formData, address: e.target.value })
               }
               placeholder="e.g., Main Campus, North Wing"
+              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Description *</Label>
             <Textarea
               id="description"
               value={formData.description}
@@ -145,6 +143,7 @@ export default function BuildingManagementDialog({
               }
               placeholder="Brief description of the building..."
               rows={3}
+              required
             />
           </div>
 
