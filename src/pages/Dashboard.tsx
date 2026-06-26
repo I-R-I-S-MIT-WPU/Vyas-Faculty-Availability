@@ -104,12 +104,16 @@ const Dashboard = () => {
 
   const getUpcomingBookings = () => {
     const now = new Date();
-    return bookings.filter((booking) => new Date(booking.start_time) > now);
+    return bookings.filter(
+      (booking) => booking.status !== "cancelled" && new Date(booking.start_time) > now,
+    );
   };
 
   const getPastBookings = () => {
     const now = new Date();
-    return bookings.filter((booking) => new Date(booking.end_time) < now);
+    return bookings.filter(
+      (booking) => booking.status === "cancelled" || new Date(booking.end_time) < now,
+    );
   };
 
   const formatDateTime = (dateString: string) => {
@@ -335,9 +339,13 @@ const Dashboard = () => {
                             {booking.room_name}
                           </CardDescription>
                         </div>
-                        <Badge variant={getBookingStatus(booking).variant}>
-                          {getBookingStatus(booking).label}
-                        </Badge>
+                        {booking.status === "cancelled" ? (
+                          <Badge variant="destructive">Cancelled</Badge>
+                        ) : (
+                          <Badge variant={getBookingStatus(booking).variant}>
+                            {getBookingStatus(booking).label}
+                          </Badge>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>

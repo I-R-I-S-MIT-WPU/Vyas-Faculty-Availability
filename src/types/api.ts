@@ -203,3 +203,102 @@ export interface AdminBookingsResponse {
   };
   filters: { date: string | null; room: string | null; status: string | null };
 }
+
+// ============================================================
+// Timetable Import (LLM-assisted timetable ingestion)
+// ============================================================
+
+export type ImportJobStatus =
+  | "CREATED"
+  | "PROCESSING"
+  | "REVIEW_REQUIRED"
+  | "APPROVED"
+  | "COMPLETED"
+  | "FAILED";
+
+export interface TimetableImportJob {
+  id: string;
+  name: string;
+  status: ImportJobStatus;
+  semester: string | null;
+  effective_from: string | null;
+  created_by: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  error_message: string | null;
+  file_count?: number | string;
+}
+
+export type ImportFileExtractionStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "NEEDS_OCR";
+
+export interface TimetableImportFile {
+  id: string;
+  job_id: string;
+  original_filename: string;
+  storage_path: string;
+  mime_type: string;
+  file_size_bytes: number;
+  extraction_status: ImportFileExtractionStatus;
+  raw_text: string | null;
+  ocr_used: boolean;
+  created_at: string;
+}
+
+export type ExtractedLectureConfidence = "HIGH" | "MEDIUM" | "LOW";
+export type ExtractedLectureStatus = "PENDING" | "APPROVED" | "REJECTED" | "BOOKING_CREATED" | "BOOKING_FAILED";
+
+export interface ExtractedLecture {
+  id: string;
+  job_id: string;
+  source_file_id: string | null;
+  raw_teacher_name: string | null;
+  raw_subject: string | null;
+  raw_room_number: string | null;
+  raw_weekday: string | null;
+  raw_start_time: string | null;
+  raw_duration_minutes: string | null;
+  raw_batch: string | null;
+  raw_lecture_type: string | null;
+  teacher_name: string | null;
+  subject: string | null;
+  room_number: string | null;
+  weekday_number: number | null; // 1=Mon..7=Sun
+  start_time: string | null;
+  duration_minutes: number | null;
+  batch: string | null;
+  lecture_type: "CLASSROOM" | "LAB" | null;
+  confidence: ExtractedLectureConfidence;
+  confidence_score: number;
+  missing_fields: string[];
+  status: ExtractedLectureStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  llm_model_used: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ImportConflictType = "ROOM_CLASH" | "FACULTY_CLASH" | "DUPLICATE" | "MISSING_FIELD";
+export type ImportConflictSeverity = "ERROR" | "WARNING";
+
+export interface ImportConflict {
+  id: string;
+  job_id: string;
+  conflict_type: ImportConflictType;
+  severity: ImportConflictSeverity;
+  lecture_ids: string[];
+  description: string;
+  resolved: boolean;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface ImportJobDetail {
+  success: boolean;
+  job: TimetableImportJob;
+  files: TimetableImportFile[];
+  lectures: ExtractedLecture[];
+  conflicts: ImportConflict[];
+}

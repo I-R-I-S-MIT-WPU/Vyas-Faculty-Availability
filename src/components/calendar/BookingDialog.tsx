@@ -133,87 +133,9 @@ export default function BookingDialog({
       }
 
       // TODO: migrate to backend — no booking_invitees endpoint exists yet on Vyas-Backend.
-
-      // Send emails using external email service
-      if (!room.requires_approval && sendEmails) {
-        try {
-          // Prepare email data
-          const startTime = new Date(inserted.start_time);
-          const endTime = new Date(inserted.end_time);
-          const date = startTime.toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          });
-          const time = startTime.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          });
-          const duration = Math.round(
-            (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60),
-          ); // hours
-
-          // Get all email addresses
-          const allEmails = [
-            ...selectedInvitees.map((invitee) => invitee.email),
-            ...extraEmails,
-          ].filter(Boolean);
-
-          if (allEmails.length > 0) {
-            // Validate that we have all required data
-            if (!inserted.title || !date || !time || !room.name) {
-              console.warn("Missing required booking data for email:", {
-                title: inserted.title,
-                date,
-                time,
-                room: room.name,
-              });
-              return;
-            }
-
-            // Send email using the curl format you provided
-            const emailPayload = {
-              emails: allEmails,
-              bookingName: inserted.title,
-              date: date,
-              time: time,
-              room: room.name,
-              duration: `${duration} hour${duration !== 1 ? "s" : ""}`,
-              additionalInfo:
-                inserted.description || "No Additional Description",
-              userEmail: user.email,
-            };
-
-            const EMAIL_SERVICE_URL =
-              "https://oacrbzapchtoeshmmhrf.supabase.co/functions/v1/send-booking-emails";
-            const AUTH_TOKEN =
-              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hY3JiemFwY2h0b2VzaG1taHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwMzI3MDEsImV4cCI6MjA2OTYwODcwMX0.0JDDizFguhGhPT5ko3alQTEPtVHrq0AYKmqwzl0C-lg";
-
-            // Debug: Log the payload being sent
-            console.log("Sending email payload:", emailPayload);
-
-            const res = await fetch(EMAIL_SERVICE_URL, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${AUTH_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(emailPayload),
-            });
-
-            if (!res.ok) {
-              const errorText = await res.text().catch(() => "");
-              console.warn("Email service call failed:", res.status, errorText);
-            } else {
-              console.log("Emails sent successfully");
-            }
-          }
-        } catch (emailErr) {
-          console.warn("Email sending failed:", emailErr);
-        }
-      }
+      // The Supabase "send-booking-emails" edge function this used to call has been
+      // decommissioned (unauthenticated, service-role key, open CORS); wire this up to
+      // a POST /booking/:id/invite endpoint on Vyas-Backend once it exists.
 
       toast({
         title: room.requires_approval ? "Submitted for approval" : "Success",

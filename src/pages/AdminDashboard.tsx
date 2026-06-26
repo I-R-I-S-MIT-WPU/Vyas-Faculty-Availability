@@ -32,6 +32,7 @@ import {
   Settings,
   FileText,
   Building2,
+  UploadCloud,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
@@ -60,6 +61,7 @@ import { RoomManagementDialog } from "@/components/admin/RoomManagementDialog";
 import { FloorManagementDialog } from "@/components/admin/FloorManagementDialog";
 import BuildingManagementDialog from "@/components/admin/BuildingManagementDialog";
 import { ReportGenerator } from "@/components/admin/ReportGenerator";
+import { TimetableImportPanel } from "@/components/admin/TimetableImportPanel";
 
 const AdminDashboard = () => {
   const { user, isAdmin } = useAuth();
@@ -338,25 +340,32 @@ const AdminDashboard = () => {
     }
   };
 
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch =
-      booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.teacher_name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      booking.room_name?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredBookings = bookings
+    .filter((booking) => {
+      const matchesSearch =
+        booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        booking.teacher_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        booking.room_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesFilter =
-      filterStatus === "all" ||
-      (filterStatus === "upcoming" &&
-        getBookingStatus(booking).label === "Upcoming") ||
-      (filterStatus === "completed" &&
-        getBookingStatus(booking).label === "Completed") ||
-      (filterStatus === "in-progress" &&
-        getBookingStatus(booking).label === "In Progress");
+      const matchesFilter =
+        filterStatus === "cancelled"
+          ? booking.status === "cancelled"
+          : booking.status !== "cancelled" &&
+            (filterStatus === "all" ||
+              (filterStatus === "upcoming" &&
+                getBookingStatus(booking).label === "Upcoming") ||
+              (filterStatus === "completed" &&
+                getBookingStatus(booking).label === "Completed") ||
+              (filterStatus === "in-progress" &&
+                getBookingStatus(booking).label === "In Progress"));
 
-    return matchesSearch && matchesFilter;
-  });
+      return matchesSearch && matchesFilter;
+    })
+    .sort(
+      (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+    );
 
   const filteredUsers = users.filter(
     (user) =>
@@ -435,7 +444,7 @@ const AdminDashboard = () => {
           className="space-y-4 sm:space-y-6"
         >
           <div className="w-full overflow-x-auto">
-            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-5 gap-1 h-auto p-1">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-7 gap-1 h-auto p-1">
               <TabsTrigger
                 value="bookings"
                 className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
@@ -489,6 +498,13 @@ const AdminDashboard = () => {
                 <FileText className="h-4 w-4" />
                 Reports
               </TabsTrigger>
+              <TabsTrigger
+                value="timetable-import"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <UploadCloud className="h-4 w-4" />
+                Timetable Import
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -532,6 +548,7 @@ const AdminDashboard = () => {
                   <SelectItem value="upcoming">Upcoming</SelectItem>
                   <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -581,9 +598,13 @@ const AdminDashboard = () => {
                           </CardDescription>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Badge variant={getBookingStatus(booking).variant}>
-                            {getBookingStatus(booking).label}
-                          </Badge>
+                          {booking.status === "cancelled" ? (
+                            <Badge variant="destructive">Cancelled</Badge>
+                          ) : (
+                            <Badge variant={getBookingStatus(booking).variant}>
+                              {getBookingStatus(booking).label}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </CardHeader>
@@ -1220,6 +1241,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="reports" className="space-y-4">
             <ReportGenerator />
+          </TabsContent>
+
+          <TabsContent value="timetable-import" className="space-y-4">
+            <TimetableImportPanel />
           </TabsContent>
         </Tabs>
 

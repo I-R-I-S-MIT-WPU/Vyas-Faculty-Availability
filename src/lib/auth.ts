@@ -8,11 +8,10 @@ export interface StoredUser {
   full_name: string;
   email: string;
   is_admin: boolean;
-  token: string;
 }
 
 function storeUser(data: AuthResponse): StoredUser {
-  const stored: StoredUser = { ...data.user, token: data.token };
+  const stored: StoredUser = { ...data.user };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   return stored;
 }

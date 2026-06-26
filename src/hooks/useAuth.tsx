@@ -17,7 +17,6 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   isAdmin: boolean;
-  token: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: ApiError | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: ApiError | null }>;
@@ -27,7 +26,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
-  token: null,
   loading: true,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
@@ -78,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user: toAuthUser(stored),
         isAdmin: stored?.is_admin ?? false,
-        token: stored?.token ?? null,
         loading,
         signIn,
         signUp,

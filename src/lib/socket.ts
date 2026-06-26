@@ -8,11 +8,7 @@ export function getSocket(): Socket {
   if (!socket) {
     socket = io(BACKEND_URL, {
       autoConnect: false,
-      auth: () => {
-        const raw = localStorage.getItem("vyaas_user");
-        const token = raw ? JSON.parse(raw).token : undefined;
-        return { token };
-      },
+      withCredentials: true, // sends the httpOnly auth cookie automatically
     });
   }
   return socket;
