@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "lucide-react";
+import { apiClient } from "@/lib/apiClient";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -15,6 +16,9 @@ export default function Auth() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<"auth" | "forgot">("auth");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
   const { user, signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -23,6 +27,22 @@ export default function Auth() {
       navigate("/");
     }
   }, [user, navigate]);
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    try {
+      await apiClient.post("/user/forgot-password", { email });
+      setForgotSuccess(true);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setForgotLoading(false);
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +111,45 @@ export default function Auth() {
         </CardHeader>
 
         <CardContent>
+          {view === "forgot" ? (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold">Reset your password</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Enter your email address and we'll send you a reset link.
+                </p>
+              </div>
+              {forgotSuccess ? (
+                <p className="text-sm text-green-600">
+                  Check your email for the reset link.
+                </p>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="teacher@mitwpu.edu.in"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={forgotLoading}>
+                    {forgotLoading ? "Sending..." : "Send Reset Link"}
+                  </Button>
+                </form>
+              )}
+              <button
+                type="button"
+                className="text-sm text-primary underline-offset-4 hover:underline"
+                onClick={() => { setView("auth"); setForgotSuccess(false); }}
+              >
+                Back to Sign In
+              </button>
+            </div>
+          ) : (
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
@@ -121,6 +180,15 @@ export default function Auth() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                      onClick={() => setView("forgot")}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>
@@ -187,6 +255,7 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

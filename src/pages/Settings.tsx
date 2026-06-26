@@ -35,6 +35,13 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -48,6 +55,11 @@ const Settings = () => {
   const [department, setDepartment] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [bookingReminders, setBookingReminders] = useState(true);
+
+  // Change password dialog
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -100,6 +112,21 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleChangePassword = async () => {
+    setResetLoading(true);
+    try {
+      await apiClient.post("/user/forgot-password", { email: user!.email });
+      setResetSent(true);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setResetLoading(false);
   };
 
   if (!user) {
@@ -332,9 +359,49 @@ const Settings = () => {
 
               <Separator />
 
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => { setResetSent(false); setPasswordDialogOpen(true); }}
+              >
                 Change Password
               </Button>
+
+              <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Password</DialogTitle>
+                    <DialogDescription>
+                      We'll send a password reset link to your email address.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-email">Email</Label>
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        value={user.email || ""}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </div>
+                    {resetSent ? (
+                      <p className="text-sm text-green-600">
+                        Check your email for the reset link.
+                      </p>
+                    ) : (
+                      <Button
+                        className="w-full"
+                        onClick={handleChangePassword}
+                        disabled={resetLoading}
+                      >
+                        {resetLoading ? "Sending..." : "Send Reset Link"}
+                      </Button>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 
