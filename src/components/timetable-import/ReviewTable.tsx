@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ExtractedLecture } from "@/types/api";
+import { useMemo, useState } from "react";
+import { ExtractedLecture, ImportConflict } from "@/types/api";
 import { timetableImportApi } from "@/lib/timetableImportApi";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Pencil, Save, X, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Pencil, Save, X, Trash2, AlertTriangle } from "lucide-react";
 
 const WEEKDAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -57,15 +58,34 @@ interface ReviewTableProps {
   onLectureUpdated: (lecture: ExtractedLecture) => void;
   onLectureRejected: (lectureId: string) => void;
   readOnly?: boolean;
+  conflicts: ImportConflict[];
 }
 
-export function ReviewTable({ jobId, lectures, onLectureUpdated, onLectureRejected, readOnly }: ReviewTableProps) {
+export function ReviewTable({
+  jobId,
+  lectures,
+  onLectureUpdated,
+  onLectureRejected,
+  readOnly,
+  conflicts,
+}: ReviewTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBuffer, setEditBuffer] = useState<Record<EditableField, string>>({} as Record<EditableField, string>);
   const [saving, setSaving] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const visibleLectures = lectures.filter((l) => l.status !== "REJECTED");
+
+  const conflictsByLecture = useMemo(() => {
+    const map = new Map<string, ImportConflict[]>();
+    for (const conflict of conflicts) {
+      for (const lectureId of conflict.lecture_ids) {
+        if (!map.has(lectureId)) map.set(lectureId, []);
+        map.get(lectureId)!.push(conflict);
+      }
+    }
+    return map;
+  }, [conflicts]);
 
   const startEdit = (lecture: ExtractedLecture) => {
     setEditingId(lecture.id);
@@ -146,12 +166,14 @@ export function ReviewTable({ jobId, lectures, onLectureUpdated, onLectureReject
             <TableHead>Type</TableHead>
             <TableHead>Confidence</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Conflicts</TableHead>
             {!readOnly && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {visibleLectures.map((lecture) => {
             const isEditing = editingId === lecture.id;
+            const rowConflicts = conflictsByLecture.get(lecture.id) ?? [];
             return (
               <TableRow key={lecture.id}>
                 <TableCell>
@@ -270,6 +292,32 @@ export function ReviewTable({ jobId, lectures, onLectureUpdated, onLectureReject
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary">{lecture.status.replace("_", " ")}</Badge>
+                </TableCell>
+                <TableCell>
+                  {rowConflicts.length === 0 ? (
+                    <div className="flex items-center justify-center">
+                      <span className="text-muted-foreground">—</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <div className="space-y-1">
+                            {rowConflicts.map((c) => (
+                              <p key={c.id}>
+                                <span className="font-semibold">{c.conflict_type.replace("_", " ")}:</span>{" "}
+                                {c.description}
+                                {c.resolved && " (resolved)"}
+                              </p>
+                            ))}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
                 </TableCell>
                 {!readOnly && (
                   <TableCell className="text-right">

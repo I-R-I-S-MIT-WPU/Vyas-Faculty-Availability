@@ -360,12 +360,16 @@ export default function BookingDialog({
             <Label htmlFor="invitees" className="text-sm">
               Invite people
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Invites aren't sent yet — this feature is temporarily unavailable.
+            </p>
             <Input
               id="invitees"
               placeholder="Search by name or email"
               value={inviteSearch}
               onChange={(e) => setInviteSearch(e.target.value)}
               className="h-9"
+              disabled
             />
             {inviteSearchResults.length > 0 && (
               <div className="border rounded-md divide-y">
@@ -420,8 +424,9 @@ export default function BookingDialog({
                   }
                 }}
                 className="h-9"
+                disabled
               />
-              <Button type="button" variant="secondary" onClick={addExtraEmail}>
+              <Button type="button" variant="secondary" onClick={addExtraEmail} disabled>
                 Add
               </Button>
             </div>
@@ -449,7 +454,7 @@ export default function BookingDialog({
 
           <div className="flex items-center justify-between pt-1">
             <Label className="text-sm">Send email notifications</Label>
-            <Switch checked={sendEmails} onCheckedChange={setSendEmails} />
+            <Switch checked={sendEmails} onCheckedChange={setSendEmails} disabled />
           </div>
 
           {/* Booking Information Alert */}

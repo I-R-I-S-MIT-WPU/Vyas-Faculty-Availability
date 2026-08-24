@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { TimetableImportJob } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +10,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Plus, RefreshCw } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 const STATUS_BADGE: Record<TimetableImportJob["status"], string> = {
   CREATED: "border-slate-300 text-slate-600",
@@ -27,9 +39,21 @@ interface ImportJobListProps {
   onSelectJob: (jobId: string) => void;
   onCreateNew: () => void;
   onRefresh: () => void;
+  onDeleteJob: (jobId: string) => Promise<void>;
 }
 
-export function ImportJobList({ jobs, loading, onSelectJob, onCreateNew, onRefresh }: ImportJobListProps) {
+export function ImportJobList({ jobs, loading, onSelectJob, onCreateNew, onRefresh, onDeleteJob }: ImportJobListProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (jobId: string) => {
+    setDeletingId(jobId);
+    try {
+      await onDeleteJob(jobId);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -83,9 +107,50 @@ export function ImportJobList({ jobs, loading, onSelectJob, onCreateNew, onRefre
                   <TableCell>{job.created_by_name || "—"}</TableCell>
                   <TableCell>{format(new Date(job.created_at), "MMM dd, yyyy")}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => onSelectJob(job.id)}>
-                      {job.status === "CREATED" ? "Continue" : "View"}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => onSelectJob(job.id)}>
+                        {job.status === "CREATED" ? "Continue" : "View"}
+                      </Button>
+                      {job.status !== "PROCESSING" && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={deletingId === job.id}
+                              className="gap-1"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete "{job.name}"?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This cannot be undone. It removes all uploaded files, extracted lectures, and
+                                conflict records for this import.
+                                {(job.status === "APPROVED" || job.status === "COMPLETED") &&
+                                  " Room bookings already created by this import will NOT be removed."}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={deletingId === job.id}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(job.id)}
+                                disabled={deletingId === job.id}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {deletingId === job.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Delete import"
+                                )}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

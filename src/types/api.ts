@@ -158,6 +158,11 @@ export interface AuthResponse {
   token: string;
 }
 
+export interface RegisterResponse {
+  requiresVerification: true;
+  email: string;
+}
+
 // ============================================================
 // Booking requests
 // ============================================================
@@ -214,7 +219,8 @@ export type ImportJobStatus =
   | "REVIEW_REQUIRED"
   | "APPROVED"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  | "CANCELLED";
 
 export interface TimetableImportJob {
   id: string;
@@ -228,9 +234,39 @@ export interface TimetableImportJob {
   updated_at: string;
   error_message: string | null;
   file_count?: number | string;
+  current_stage: string | null;
+  current_file_id: string | null;
+  files_total: number;
+  files_completed: number;
+  progress_percent: number;
+  cancel_requested: boolean;
+  stopped_at: string | null;
+}
+
+export type ImportJobEventType =
+  | "STAGE_CHANGE"
+  | "FILE_COMPLETED"
+  | "ERROR"
+  | "STOP_REQUESTED"
+  | "STOPPED";
+
+export interface ImportJobEvent {
+  id: string;
+  job_id: string;
+  event_type: ImportJobEventType;
+  file_id: string | null;
+  message: string;
+  detail: unknown;
+  created_at: string;
 }
 
 export type ImportFileExtractionStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "NEEDS_OCR";
+
+export interface FailedChunkSummary {
+  chunkIndex: number;
+  totalChunks: number;
+  errorMessage: string;
+}
 
 export interface TimetableImportFile {
   id: string;
@@ -242,6 +278,7 @@ export interface TimetableImportFile {
   extraction_status: ImportFileExtractionStatus;
   raw_text: string | null;
   ocr_used: boolean;
+  failed_chunks: FailedChunkSummary[];
   created_at: string;
 }
 

@@ -4,6 +4,9 @@ import {
   signIn as signInRequest,
   signUp as signUpRequest,
   signOut as signOutRequest,
+  verifyEmail as verifyEmailRequest,
+  resendVerification as resendVerificationRequest,
+  completeOAuthLogin as completeOAuthLoginRequest,
   StoredUser,
 } from "@/lib/auth";
 import { ApiError } from "@/lib/apiClient";
@@ -19,7 +22,14 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: ApiError | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: ApiError | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string
+  ) => Promise<{ error: ApiError | null; requiresVerification: boolean; email: string }>;
+  verifyEmail: (email: string, code: string) => Promise<{ error: ApiError | null }>;
+  resendVerification: (email: string) => Promise<{ error: ApiError | null }>;
+  completeOAuthLogin: () => Promise<{ error: ApiError | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -28,7 +38,10 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   loading: true,
   signIn: async () => ({ error: null }),
-  signUp: async () => ({ error: null }),
+  signUp: async () => ({ error: null, requiresVerification: false, email: "" }),
+  verifyEmail: async () => ({ error: null }),
+  resendVerification: async () => ({ error: null }),
+  completeOAuthLogin: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -61,7 +74,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await signUpRequest(email, password, fullName);
+    const { error, requiresVerification, email: verifiedEmail } = await signUpRequest(email, password, fullName);
+    // No session is created here — requiresVerification is always true on
+    // success, so there's nothing to refresh from localStorage yet.
+    return { error, requiresVerification, email: verifiedEmail };
+  };
+
+  const verifyEmail = async (email: string, code: string) => {
+    const { error } = await verifyEmailRequest(email, code);
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const resendVerification = async (email: string) => {
+    return resendVerificationRequest(email);
+  };
+
+  const completeOAuthLogin = async () => {
+    const { error } = await completeOAuthLoginRequest();
     if (!error) setStored(getCurrentUser());
     return { error };
   };
@@ -79,6 +109,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         signIn,
         signUp,
+        verifyEmail,
+        resendVerification,
+        completeOAuthLogin,
         signOut,
       }}
     >

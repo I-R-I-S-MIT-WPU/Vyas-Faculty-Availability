@@ -1,13 +1,15 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
+export const BASE_URL = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
 
 export class ApiError extends Error {
   status: number;
   details?: string;
+  code?: string;
 
-  constructor(message: string, status: number, details?: string) {
+  constructor(message: string, status: number, details?: string, code?: string) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -20,7 +22,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (res.status === 401) {
     localStorage.removeItem("vyaas_user");
-    if (window.location.pathname !== "/auth") {
+    if (!window.location.pathname.startsWith("/auth")) {
       window.location.href = "/auth";
     }
     throw new ApiError("Unauthorized", 401);
@@ -28,7 +30,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(body.message ?? body.error ?? "Request failed", res.status, body.details);
+    throw new ApiError(body.message ?? body.error ?? "Request failed", res.status, body.details, body.code);
   }
 
   if (res.status === 204) return undefined as T;

@@ -10,6 +10,7 @@ import type {
   ExtractedLecture,
   ImportConflict,
   TimetableImportFile,
+  ImportJobEvent,
 } from "@/types/api";
 
 const BASE = "/timetable-import";
@@ -57,4 +58,19 @@ export const timetableImportApi = {
     ),
 
   approveJob: (jobId: string) => apiClient.post<{ success: boolean; message: string }>(`${BASE}/jobs/${jobId}/approve`, {}),
+
+  getEvents: (jobId: string, since?: string) =>
+    apiClient.get<{ success: boolean; events: ImportJobEvent[] }>(
+      `${BASE}/jobs/${jobId}/events${since ? `?since=${encodeURIComponent(since)}` : ""}`
+    ),
+
+  stopJob: (jobId: string) => apiClient.post<{ success: boolean; message: string }>(`${BASE}/jobs/${jobId}/stop`, {}),
+
+  retryFailedChunks: (jobId: string, fileId: string) =>
+    apiClient.post<{ success: boolean; message: string }>(
+      `${BASE}/jobs/${jobId}/files/${fileId}/retry-failed-chunks`,
+      {}
+    ),
+
+  deleteJob: (jobId: string) => apiClient.del<{ success: boolean; message: string }>(`${BASE}/jobs/${jobId}`),
 };
