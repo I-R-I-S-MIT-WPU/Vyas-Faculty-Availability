@@ -250,22 +250,6 @@ const AdminDashboard = () => {
 
   const deleteRoom = async (roomId: string) => {
     try {
-      // Check if room has any bookings — the backend's DELETE /buildings/room/:id
-      // has no such guard (rooms.bookings cascade on delete), so this is enforced client-side.
-      const { pagination } = await apiClient.get<AdminBookingsResponse>(
-        `/booking/admin/all?room=${roomId}&limit=1`,
-      );
-
-      if (pagination.totalItems > 0) {
-        toast({
-          title: "Cannot Delete Room",
-          description:
-            "This room has existing bookings. Please remove all bookings before deleting the room.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       await apiClient.del(`/buildings/room/${roomId}`);
 
       toast({
@@ -278,7 +262,10 @@ const AdminDashboard = () => {
       console.error("Error deleting room:", error);
       toast({
         title: "Error",
-        description: "Failed to delete room",
+        description:
+          error instanceof ApiError && error.status === 400
+            ? "This room has existing bookings. Please remove all bookings before deleting the room."
+            : "Failed to delete room",
         variant: "destructive",
       });
     }
