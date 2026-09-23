@@ -18,8 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { Booking, Building, Floor, Room } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Booking, Building, Floor, Room } from "@/types/api";
 import {
   addHours,
   endOfDay,
@@ -83,6 +83,7 @@ export default function FreeRooms({
   const [selectedBuilding, setSelectedBuilding] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [freeRoomsLoading, setFreeRoomsLoading] = useState(false);
 
   const [preset, setPreset] = useState<Preset>("now");
   const [customStart, setCustomStart] = useState<string>("");
@@ -90,90 +91,22 @@ export default function FreeRooms({
   const [filterRoomType, setFilterRoomType] = useState<string>("any");
   const [filterMinCapacity, setFilterMinCapacity] = useState<string>("any");
 
-  // Load buildings, rooms and today's bookings in one go
+  // Load buildings for the building filter dropdown.
+  // NOTE: the backend has no non-admin "all rooms" / "all of today's bookings"
+  // endpoint, so the per-hour free-room computation below calls
+  // GET /buildings/rooms/free per slot instead of computing it from a local snapshot.
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-
-        // Load buildings
-        const buildingsQuery = supabase
-          .from("buildings")
-          .select("*")
-          .eq("is_active", true)
-          .order("name");
-
-        const roomsQuery = supabase
-          .from("rooms")
-          .select(
-            `
-            *,
-            floor:floors(
-              *,
-              building:buildings(*)
-            )
-          `,
-          )
-          .eq("is_active", true)
-          .order("name");
-
-        const start = startOfDay(new Date()).toISOString();
-        const end = endOfDay(new Date()).toISOString();
-        const bookingsQuery = supabase
-          .from("bookings")
-          .select("*")
-          .eq("status", "confirmed")
-          .gte("start_time", start)
-          .lte("end_time", end);
-
-        const [buildingsRes, roomsRes, bookingsRes] = await Promise.all([
-          buildingsQuery,
-          roomsQuery,
-          bookingsQuery,
-        ]);
-
-        if (buildingsRes.error) {
-          console.error("Buildings error:", buildingsRes.error);
-          throw buildingsRes.error;
-        }
-        if (roomsRes.error) {
-          console.error("Rooms error:", roomsRes.error);
-          throw roomsRes.error;
-        }
-        if (bookingsRes.error) {
-          console.error("Bookings error:", bookingsRes.error);
-          throw bookingsRes.error;
-        }
-
-        setBuildings(buildingsRes.data || []);
-
-        // Set default building if none selected
-        if (
-          buildingsRes.data &&
-          buildingsRes.data.length > 0 &&
-          !selectedBuilding
-        ) {
-          setSelectedBuilding(buildingsRes.data[0].id);
-        }
-
-        const roomsWithFloorData = roomsRes.data as Array<
-          Room & { floor: Floor & { building: Building } }
-        >;
-        const flattened: RoomWithFloor[] = roomsWithFloorData.map((r) => ({
-          ...r,
-          floor: r.floor,
-        }));
-
-        console.log("Fetched rooms:", flattened);
-        console.log("Fetched bookings:", bookingsRes.data);
-
-        // Temporarily show all rooms for debugging
-        setRooms(flattened);
-        console.log(
-          "All room types found:",
-          flattened.map((r) => r.room_type),
+        const { buildings: buildingsData } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+          "/buildings",
         );
-        setBookings(bookingsRes.data || []);
+        setBuildings(buildingsData || []);
+
+        if (buildingsData && buildingsData.length > 0 && !selectedBuilding) {
+          setSelectedBuilding(buildingsData[0].id);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -181,7 +114,7 @@ export default function FreeRooms({
       }
     };
     load();
-  }, [classOnly, selectedBuilding]);
+  }, [classOnly]);
 
   // Filter rooms by selected building
   const filteredRooms = useMemo(() => {
@@ -237,59 +170,81 @@ export default function FreeRooms({
     filterMinCapacity,
   ]);
 
-  // Get all free rooms from current time onwards for the dialog
-  const getFreeRoomsFromNow = useMemo(() => {
-    const now = new Date();
-    const endOfToday = endOfDay(now);
-    const hourlySlots: Array<{ hour: string; rooms: RoomWithFloor[] }> = [];
+  // Get all free rooms from current time onwards for the dialog.
+  // Asks the backend per hourly slot (it already computes room/time conflicts server-side).
+  const [getFreeRoomsFromNow, setGetFreeRoomsFromNow] = useState<
+    Array<{ hour: string; rooms: RoomWithFloor[] }>
+  >([]);
 
-    // Generate hourly slots from current time to end of day
-    // Use the same time format as the calendar (e.g., "2:30-3:30")
-    let currentHour = new Date(now);
+  useEffect(() => {
+    if (!dialogOpen) return;
 
-    // Round to the nearest 30-minute slot
-    const minutes = currentHour.getMinutes();
-    if (minutes < 30) {
-      currentHour.setMinutes(30, 0, 0);
-    } else {
-      currentHour.setMinutes(0, 0, 0);
-      currentHour.setHours(currentHour.getHours() + 1);
-    }
+    const computeHourlySlots = async () => {
+      setFreeRoomsLoading(true);
+      try {
+        const now = new Date();
+        const endOfToday = endOfDay(now);
+        const dateStr = format(now, "yyyy-MM-dd");
+        const buildingName = buildings.find((b) => b.id === selectedBuilding)?.name;
 
-    while (currentHour < endOfToday) {
-      const nextHour = new Date(currentHour);
-      nextHour.setHours(nextHour.getHours() + 1);
+        // Generate hourly slots from current time to end of day
+        let currentHour = new Date(now);
+        const minutes = currentHour.getMinutes();
+        if (minutes < 30) {
+          currentHour.setMinutes(30, 0, 0);
+        } else {
+          currentHour.setMinutes(0, 0, 0);
+          currentHour.setHours(currentHour.getHours() + 1);
+        }
 
-      // Find rooms free in this hour, applying filters
-      const freeRoomsInHour = filteredRooms
-        .filter(
-          (room) =>
-            filterRoomType === "any" || room.room_type === filterRoomType,
-        )
-        .filter(
-          (room) =>
-            filterMinCapacity === "any" ||
-            (room.capacity || 0) >= parseInt(filterMinCapacity),
-        )
-        .filter((room) =>
-          isRoomFree(bookingsByRoom, room.id, currentHour, nextHour),
+        const windows: Array<{ start: Date; end: Date }> = [];
+        while (currentHour < endOfToday) {
+          const nextHour = new Date(currentHour);
+          nextHour.setHours(nextHour.getHours() + 1);
+          windows.push({ start: new Date(currentHour), end: nextHour });
+          currentHour = nextHour;
+        }
+
+        const results = await Promise.all(
+          windows.map(({ start, end }) =>
+            apiClient
+              .get<{ success: boolean; rooms: any[] }>(
+                `/buildings/rooms/free?date=${dateStr}&startTime=${format(start, "HH:mm")}&endTime=${format(end, "HH:mm")}`,
+              )
+              .then((res) => res.rooms || [])
+              .catch(() => []),
+          ),
         );
 
-      if (freeRoomsInHour.length > 0) {
-        // Format time like the calendar: "2:30-3:30"
-        const startTime = format(currentHour, "h:mm");
-        const endTime = format(nextHour, "h:mm");
-        hourlySlots.push({
-          hour: `${startTime}-${endTime}`,
-          rooms: freeRoomsInHour,
-        });
+        const hourlySlots = windows
+          .map(({ start, end }, i) => {
+            let freeRoomsInHour = results[i];
+            if (buildingName) {
+              freeRoomsInHour = freeRoomsInHour.filter((r) => r.building_name === buildingName);
+            }
+            freeRoomsInHour = freeRoomsInHour
+              .filter((r) => filterRoomType === "any" || r.room_type === filterRoomType)
+              .filter(
+                (r) => filterMinCapacity === "any" || (r.capacity || 0) >= parseInt(filterMinCapacity),
+              );
+
+            const mapped: RoomWithFloor[] = freeRoomsInHour.map((r) => ({
+              ...r,
+              floor: { id: r.floor_id, name: r.floor_name, building: { name: buildingName } } as any,
+            }));
+
+            return { hour: `${format(start, "h:mm")}-${format(end, "h:mm")}`, rooms: mapped };
+          })
+          .filter((slot) => slot.rooms.length > 0);
+
+        setGetFreeRoomsFromNow(hourlySlots);
+      } finally {
+        setFreeRoomsLoading(false);
       }
+    };
 
-      currentHour = nextHour;
-    }
-
-    return hourlySlots;
-  }, [filteredRooms, bookingsByRoom]);
+    computeHourlySlots();
+  }, [dialogOpen, selectedBuilding, filterRoomType, filterMinCapacity, buildings]);
 
   const scrollToTopIfMobile = () => {
     if (typeof window === "undefined") return;
@@ -389,7 +344,14 @@ export default function FreeRooms({
             </div>
           </div>
           <div className="space-y-3">
-            {getFreeRoomsFromNow.length === 0 ? (
+            {freeRoomsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-3">
+                  Checking room availability...
+                </p>
+              </div>
+            ) : getFreeRoomsFromNow.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
@@ -553,7 +515,14 @@ export default function FreeRooms({
                 </div>
               </div>
               <div className="space-y-3">
-                {getFreeRoomsFromNow.length === 0 ? (
+                {freeRoomsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-3">
+                  Checking room availability...
+                </p>
+              </div>
+            ) : getFreeRoomsFromNow.length === 0 ? (
                   <div className="text-center py-8">
                     <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">

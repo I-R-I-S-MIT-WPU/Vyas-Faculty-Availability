@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
-import { supabase } from "@/integrations/supabase/client";
-import { Profile } from "@/types/database";
+import { apiClient, ApiError } from "@/lib/apiClient";
+import { Profile } from "@/types/api";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -35,9 +35,16 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const Settings = () => {
-  const { user } = useAuth();
+  const { user, signOutEverywhere } = useAuth();
   const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +56,12 @@ const Settings = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [bookingReminders, setBookingReminders] = useState(true);
 
+  // Change password dialog
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
   useEffect(() => {
     if (user) {
       fetchUserProfile();
@@ -59,13 +72,7 @@ const Settings = () => {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user?.id)
-        .single();
-
-      if (error) throw error;
+      const { user: data } = await apiClient.get<{ success: boolean; user: Profile }>("/user/me");
 
       setProfile(data);
       setFullName(data.full_name || "");
@@ -86,34 +93,60 @@ const Settings = () => {
     try {
       setSaving(true);
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          department: department,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user?.id);
-
-      if (error) throw error;
+      const { user: updated } = await apiClient.patch<{ success: boolean; user: Profile }>(
+        "/user/me",
+        { full_name: fullName, department: department || undefined },
+      );
+      setProfile(updated);
 
       toast({
         title: "Success",
         description: "Profile updated successfully",
       });
-
-      // Refresh profile data
-      fetchUserProfile();
     } catch (error) {
       console.error("Error updating profile:", error);
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: error instanceof ApiError ? error.message : "Failed to update profile",
         variant: "destructive",
       });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogoutEverywhere = async () => {
+    setLogoutAllLoading(true);
+    const { error } = await signOutEverywhere();
+    setLogoutAllLoading(false);
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not log out of all devices. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // This device's session is revoked too — send them back to sign in.
+    window.location.href = "/auth";
+  };
+
+  const handleChangePassword = async () => {
+    setResetLoading(true);
+    try {
+      await apiClient.post("/user/forgot-password", { email: user!.email });
+      setResetSent(true);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description:
+          err instanceof ApiError && err.status === 429
+            ? "Too many requests. Please try again later."
+            : "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setResetLoading(false);
   };
 
   if (!user) {
@@ -173,6 +206,7 @@ const Settings = () => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your full name"
+                      maxLength={100}
                     />
                   </div>
 
@@ -341,18 +375,71 @@ const Settings = () => {
 
               <div className="space-y-2">
                 <Label>Last Sign In</Label>
-                <p className="text-sm text-muted-foreground">
-                  {user.last_sign_in_at
-                    ? new Date(user.last_sign_in_at).toLocaleString()
-                    : "Unknown"}
-                </p>
+                <p className="text-sm text-muted-foreground">Not available</p>
               </div>
 
               <Separator />
 
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => { setResetSent(false); setPasswordDialogOpen(true); }}
+              >
                 Change Password
               </Button>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={logoutAllLoading}
+                  onClick={handleLogoutEverywhere}
+                >
+                  {logoutAllLoading ? "Logging out..." : "Log Out of All Devices"}
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  Signs you out everywhere, including this device. Use this if you
+                  think someone else has access to your account.
+                </p>
+              </div>
+
+              <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Password</DialogTitle>
+                    <DialogDescription>
+                      We'll send a password reset link to your email address.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-email">Email</Label>
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        value={user.email || ""}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </div>
+                    {resetSent ? (
+                      <p className="text-sm text-green-600">
+                        Check your email for the reset link.
+                      </p>
+                    ) : (
+                      <Button
+                        className="w-full"
+                        onClick={handleChangePassword}
+                        disabled={resetLoading}
+                      >
+                        {resetLoading ? "Sending..." : "Send Reset Link"}
+                      </Button>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 

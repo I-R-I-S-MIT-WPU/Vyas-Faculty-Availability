@@ -1,54 +1,130 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import {
+  getCurrentUser,
+  signIn as signInRequest,
+  signUp as signUpRequest,
+  signOut as signOutRequest,
+  signOutEverywhere as signOutEverywhereRequest,
+  verifyEmail as verifyEmailRequest,
+  resendVerification as resendVerificationRequest,
+  completeOAuthLogin as completeOAuthLoginRequest,
+  StoredUser,
+} from "@/lib/auth";
+import { ApiError } from "@/lib/apiClient";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  full_name: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  isAdmin: boolean;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: ApiError | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string
+  ) => Promise<{ error: ApiError | null; requiresVerification: boolean; email: string }>;
+  verifyEmail: (email: string, code: string, password: string) => Promise<{ error: ApiError | null }>;
+  resendVerification: (email: string) => Promise<{ error: ApiError | null }>;
+  completeOAuthLogin: () => Promise<{ error: ApiError | null }>;
+  signOut: () => Promise<void>;
+  signOutEverywhere: () => Promise<{ error: ApiError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  session: null,
+  isAdmin: false,
   loading: true,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null, requiresVerification: false, email: "" }),
+  verifyEmail: async () => ({ error: null }),
+  resendVerification: async () => ({ error: null }),
+  completeOAuthLogin: async () => ({ error: null }),
+  signOut: async () => {},
+  signOutEverywhere: async () => ({ error: null }),
 });
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
 
+function toAuthUser(stored: StoredUser | null): AuthUser | null {
+  if (!stored) return null;
+  return { id: stored.id, email: stored.email, full_name: stored.full_name };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [stored, setStored] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    setStored(getCurrentUser());
+    setLoading(false);
   }, []);
 
+  const signIn = async (email: string, password: string) => {
+    const { error } = await signInRequest(email, password);
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const { error, requiresVerification, email: verifiedEmail } = await signUpRequest(email, password, fullName);
+    // No session is created here — requiresVerification is always true on
+    // success, so there's nothing to refresh from localStorage yet.
+    return { error, requiresVerification, email: verifiedEmail };
+  };
+
+  const verifyEmail = async (email: string, code: string, password: string) => {
+    const { error } = await verifyEmailRequest(email, code, password);
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const resendVerification = async (email: string) => {
+    return resendVerificationRequest(email);
+  };
+
+  const completeOAuthLogin = async () => {
+    const { error } = await completeOAuthLoginRequest();
+    if (!error) setStored(getCurrentUser());
+    return { error };
+  };
+
+  const signOut = async () => {
+    await signOutRequest();
+    setStored(null);
+  };
+
+  const signOutEverywhere = async () => {
+    const { error } = await signOutEverywhereRequest();
+    if (!error) setStored(null);
+    return { error };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider
+      value={{
+        user: toAuthUser(stored),
+        isAdmin: stored?.is_admin ?? false,
+        loading,
+        signIn,
+        signUp,
+        verifyEmail,
+        resendVerification,
+        completeOAuthLogin,
+        signOut,
+        signOutEverywhere,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

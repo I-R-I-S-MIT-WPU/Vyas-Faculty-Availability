@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Booking } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Booking, Room, AdminBookingsResponse } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -27,7 +27,7 @@ import {
   parseISO,
 } from "date-fns";
 import { CalendarIcon, Download, FileText } from "lucide-react";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 interface ReportGeneratorProps {
   className?: string;
@@ -74,29 +74,42 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
     startDate: Date,
     endDate: Date
   ): Promise<Booking[]> => {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select(
-        `
-        *,
-        room:rooms(name, room_type, capacity, floor:floors(name)),
-        owner:profiles!bookings_teacher_id_fkey(full_name, email, department),
-        approver:profiles!bookings_approved_by_fkey(full_name, email)
-      `
-      )
-      .gte("start_time", startDate.toISOString())
-      .lte("end_time", endDate.toISOString())
-      .order("start_time", { ascending: true });
+    // Filtered server-side by date range. Equivalent to the old fetch-everything
+    // -then-filter-client-side approach because a booking can't cross midnight
+    // (the validate_booking_times trigger confines it to 07:30–22:30 the same
+    // day), so filtering on start_time alone can't drop a booking the old
+    // `end <= endDate` check would have kept.
+    const params = new URLSearchParams({
+      startDate: format(startDate, "yyyy-MM-dd"),
+      endDate: format(endDate, "yyyy-MM-dd"),
+      limit: "10000",
+    });
+    const { data } = await apiClient.get<AdminBookingsResponse>(`/booking/admin/all?${params}`);
+    // Server returns start_time DESC; the report reads chronologically.
+    return (data || []).sort(
+      (a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime()
+    );
+  };
 
-    if (error) throw error;
-    return data || [];
+  // /booking/admin/all doesn't include room_type — looked up separately for the
+  // "Bookings by Room Type" stat below.
+  const fetchRoomTypeById = async (): Promise<Record<string, string>> => {
+    const { rooms } = await apiClient.get<{ success: boolean; rooms: Room[] }>(
+      "/buildings/all-rooms",
+    );
+    const map: Record<string, string> = {};
+    (rooms || []).forEach((r) => {
+      map[r.id] = r.room_type;
+    });
+    return map;
   };
 
   const generatePDF = async (
     bookings: Booking[],
     startDate: Date,
     endDate: Date,
-    reportType: ReportType
+    reportType: ReportType,
+    roomTypeById: Record<string, string>
   ) => {
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -185,9 +198,7 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
         xPosition += colWidths[0];
 
         // Room
-        const roomText = `${booking.room?.name || "N/A"} (${
-          booking.room?.floor?.name || "N/A"
-        })`;
+        const roomText = booking.room_name || "N/A";
         pdf.text(roomText.substring(0, 20), xPosition, yPosition);
         xPosition += colWidths[1];
 
@@ -197,7 +208,7 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
 
         // Teacher
         pdf.text(
-          (booking.profiles?.full_name || "N/A").substring(0, 25),
+          (booking.teacher_name || "N/A").substring(0, 25),
           xPosition,
           yPosition
         );
@@ -222,7 +233,7 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
 
       // Room usage stats
       const roomUsage = bookings.reduce((acc, booking) => {
-        const roomName = booking.room?.name || "Unknown";
+        const roomName = booking.room_name || "Unknown";
         acc[roomName] = (acc[roomName] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
@@ -242,7 +253,7 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
 
       // Room type stats
       const typeUsage = bookings.reduce((acc, booking) => {
-        const type = booking.room?.room_type || "unknown";
+        const type = roomTypeById[booking.room_id] || "unknown";
         acc[type] = (acc[type] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
@@ -300,14 +311,17 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
       }
 
       const { start, end } = getDateRange(reportType, selectedDate);
-      const bookings = await fetchBookingsForReport(start, end);
+      const [bookings, roomTypeById] = await Promise.all([
+        fetchBookingsForReport(start, end),
+        fetchRoomTypeById(),
+      ]);
 
       toast({
         title: "Generating Report",
         description: `Found ${bookings.length} bookings for the selected period`,
       });
 
-      await generatePDF(bookings, start, end, reportType);
+      await generatePDF(bookings, start, end, reportType, roomTypeById);
 
       toast({
         title: "Success",

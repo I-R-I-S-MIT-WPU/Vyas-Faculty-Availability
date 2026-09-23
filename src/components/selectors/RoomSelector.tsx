@@ -11,8 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { Room, Floor, Building } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { Room, Floor, Building } from "@/types/api";
 import { toast } from "@/hooks/use-toast";
 import {
   Search,
@@ -121,13 +121,9 @@ export default function RoomSelector({
 
   const fetchBuildings = async () => {
     try {
-      const { data: buildingsData, error } = await supabase
-        .from("buildings")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-
-      if (error) throw error;
+      const { buildings: buildingsData } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+        "/buildings",
+      );
       setBuildings(buildingsData || []);
 
       // Prefer default to building named "Vyas" (case-insensitive), else first
@@ -149,19 +145,9 @@ export default function RoomSelector({
 
   const fetchFloors = async () => {
     try {
-      const { data: floorsData, error } = await supabase
-        .from("floors")
-        .select(
-          `
-          *,
-          rooms (*),
-          building:buildings(*)
-        `,
-        )
-        .eq("building_id", selectedBuilding)
-        .order("number");
-
-      if (error) throw error;
+      const { floors: floorsData } = await apiClient.get<{ success: boolean; floors: FloorWithRooms[] }>(
+        `/buildings/${selectedBuilding}/floors`,
+      );
       setFloors(floorsData || []);
       setLoading(false);
     } catch (error) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -12,57 +12,24 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { signOut } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
   onVyasClick?: () => void;
 }
 
 export default function Header({ onVyasClick }: HeaderProps) {
-  const { user, loading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { user, loading, isAdmin, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      checkAdminStatus();
-    }
-  }, [user]);
-
-  const checkAdminStatus = async () => {
-    try {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", user?.id)
-        .single();
-
-      if (error) throw error;
-      setIsAdmin(profile?.is_admin || false);
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-      setIsAdmin(false);
-    }
-  };
-
   const handleSignOut = async () => {
-    const { error } = await signOut();
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Signed out successfully",
-      });
-    }
+    await signOut();
+    toast({
+      title: "Success",
+      description: "Signed out successfully",
+    });
   };
 
   return (

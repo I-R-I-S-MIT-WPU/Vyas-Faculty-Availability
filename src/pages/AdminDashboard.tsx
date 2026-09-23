@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { Booking, Room, Profile, Floor, Building } from "@/types/database";
+import { apiClient, ApiError } from "@/lib/apiClient";
+import { Booking, Room, Profile, Floor, Building, AdminBookingsResponse } from "@/types/api";
 import Header from "@/components/layout/Header";
 import {
   Card,
@@ -32,6 +32,7 @@ import {
   Settings,
   FileText,
   Building2,
+  UploadCloud,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
@@ -60,9 +61,10 @@ import { RoomManagementDialog } from "@/components/admin/RoomManagementDialog";
 import { FloorManagementDialog } from "@/components/admin/FloorManagementDialog";
 import BuildingManagementDialog from "@/components/admin/BuildingManagementDialog";
 import { ReportGenerator } from "@/components/admin/ReportGenerator";
+import { TimetableImportPanel } from "@/components/admin/TimetableImportPanel";
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -73,7 +75,6 @@ const AdminDashboard = () => {
   const [pendingOnly, setPendingOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // Dialog states
   const [roomDialog, setRoomDialog] = useState<{
@@ -90,32 +91,10 @@ const AdminDashboard = () => {
   }>({ open: false });
 
   useEffect(() => {
-    if (user) {
-      checkAdminStatus();
-    }
-  }, [user]);
-
-  useEffect(() => {
     if (isAdmin) {
       fetchData();
     }
   }, [isAdmin]);
-
-  const checkAdminStatus = async () => {
-    try {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", user?.id)
-        .single();
-
-      if (error) throw error;
-      setIsAdmin(profile?.is_admin || false);
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-      setIsAdmin(false);
-    }
-  };
 
   const fetchData = async () => {
     try {
@@ -140,42 +119,25 @@ const AdminDashboard = () => {
   };
 
   const fetchAllBookings = async () => {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select(
-        `
-        *,
-        room:rooms(*),
-        owner:profiles!bookings_teacher_id_fkey(full_name, email, is_admin),
-        approver:profiles!bookings_approved_by_fkey(full_name, email)
-      `
-      )
-      .order("start_time", { ascending: false });
-
-    if (error) throw error;
-    const list = (data || []) as Booking[];
-    setBookings(
-      pendingOnly ? list.filter((b) => b.status === "pending") : list
-    );
+    const params = pendingOnly ? "?status=pending&limit=1000" : "?limit=1000";
+    const { data } = await apiClient.get<AdminBookingsResponse>(`/booking/admin/all${params}`);
+    setBookings(data || []);
   };
 
   const approveBooking = async (bookingId: string) => {
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({
-          status: "confirmed" as any,
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-        } as any)
-        .eq("id", bookingId);
-      if (error) throw error;
+      await apiClient.patch(`/booking/${bookingId}`, { status: "confirmed" });
       toast({
         title: "Approved",
         description: "Booking approved and confirmed.",
       });
       fetchAllBookings();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast({ title: "This booking changed", description: "Refreshing the list." });
+        fetchAllBookings();
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to approve booking",
@@ -186,14 +148,15 @@ const AdminDashboard = () => {
 
   const denyBooking = async (bookingId: string) => {
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "denied" as any } as any)
-        .eq("id", bookingId);
-      if (error) throw error;
+      await apiClient.patch(`/booking/${bookingId}`, { status: "denied" });
       toast({ title: "Denied", description: "Booking request denied." });
       fetchAllBookings();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast({ title: "This booking changed", description: "Refreshing the list." });
+        fetchAllBookings();
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to deny booking",
@@ -203,53 +166,29 @@ const AdminDashboard = () => {
   };
 
   const fetchAllUsers = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    setUsers(data || []);
+    const { users: list } = await apiClient.get<{ success: boolean; users: Profile[] }>("/user/all");
+    setUsers(list || []);
   };
 
   const fetchAllRooms = async () => {
-    const { data, error } = await supabase
-      .from("rooms")
-      .select(
-        `
-        *,
-        floor:floors(*)
-      `
-      )
-      .order("name", { ascending: true });
-
-    if (error) throw error;
-    setRooms((data as any) || []);
+    const { rooms: list } = await apiClient.get<{ success: boolean; rooms: Room[] }>(
+      "/buildings/all-rooms",
+    );
+    setRooms(list || []);
   };
 
   const fetchAllFloors = async () => {
-    const { data, error } = await (supabase as any)
-      .from("floors")
-      .select(
-        `
-        *,
-        building:buildings(*)
-      `
-      )
-      .order("number", { ascending: true });
-
-    if (error) throw error;
-    setFloors((data as any) || []);
+    const { floors: list } = await apiClient.get<{ success: boolean; floors: Floor[] }>(
+      "/buildings/all-floors",
+    );
+    setFloors(list || []);
   };
 
   const fetchAllBuildings = async () => {
-    const { data, error } = await (supabase as any)
-      .from("buildings")
-      .select("*")
-      .order("name", { ascending: true });
-
-    if (error) throw error;
-    setBuildings((data as any) || []);
+    const { buildings: list } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+      "/buildings",
+    );
+    setBuildings(list || []);
   };
 
   const handleBuildingAdded = (building: Building) => {
@@ -259,30 +198,17 @@ const AdminDashboard = () => {
   const deleteBooking = async (booking: Booking) => {
     try {
       if (booking.template_id && booking.generated_for_week) {
-        const { error: exceptionError } = await (supabase as any)
-          .from("room_timetable_template_exceptions")
-          .upsert(
-            {
-              template_id: booking.template_id,
-              week_start_date: booking.generated_for_week,
-              resolved_booking_id: booking.id,
-              reason: "removed_by_admin",
-              created_by: user?.id ?? null,
-            },
-            { onConflict: "template_id,week_start_date" }
-          );
-
-        if (exceptionError) {
+        try {
+          await apiClient.post(`/timetable/${booking.template_id}/exception`, {
+            weekStartDate: booking.generated_for_week,
+            reason: "removed_by_admin",
+          });
+        } catch (exceptionError) {
           console.warn("Failed to record template exception", exceptionError);
         }
       }
 
-      const { error } = await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", booking.id);
-
-      if (error) throw error;
+      await apiClient.del(`/booking/${booking.id}`);
 
       toast({
         title: "Success",
@@ -302,12 +228,7 @@ const AdminDashboard = () => {
 
   const toggleAdminStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_admin: !currentStatus })
-        .eq("id", userId);
-
-      if (error) throw error;
+      await apiClient.patch(`/user/${userId}/admin`);
 
       toast({
         title: "Success",
@@ -329,16 +250,13 @@ const AdminDashboard = () => {
 
   const deleteRoom = async (roomId: string) => {
     try {
-      // Check if room has any bookings
-      const { data: bookings, error: bookingsError } = await supabase
-        .from("bookings")
-        .select("id")
-        .eq("room_id", roomId)
-        .limit(1);
+      // Check if room has any bookings — the backend's DELETE /buildings/room/:id
+      // has no such guard (rooms.bookings cascade on delete), so this is enforced client-side.
+      const { pagination } = await apiClient.get<AdminBookingsResponse>(
+        `/booking/admin/all?room=${roomId}&limit=1`,
+      );
 
-      if (bookingsError) throw bookingsError;
-
-      if (bookings && bookings.length > 0) {
+      if (pagination.totalItems > 0) {
         toast({
           title: "Cannot Delete Room",
           description:
@@ -348,9 +266,7 @@ const AdminDashboard = () => {
         return;
       }
 
-      const { error } = await supabase.from("rooms").delete().eq("id", roomId);
-
-      if (error) throw error;
+      await apiClient.del(`/buildings/room/${roomId}`);
 
       toast({
         title: "Success",
@@ -370,31 +286,7 @@ const AdminDashboard = () => {
 
   const deleteFloor = async (floorId: string) => {
     try {
-      // Check if floor has any rooms
-      const { data: rooms, error: roomsError } = await supabase
-        .from("rooms")
-        .select("id")
-        .eq("floor_id", floorId)
-        .limit(1);
-
-      if (roomsError) throw roomsError;
-
-      if (rooms && rooms.length > 0) {
-        toast({
-          title: "Cannot Delete Floor",
-          description:
-            "This floor has existing rooms. Please remove all rooms before deleting the floor.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { error } = await supabase
-        .from("floors")
-        .delete()
-        .eq("id", floorId);
-
-      if (error) throw error;
+      await apiClient.del(`/buildings/floor/${floorId}`);
 
       toast({
         title: "Success",
@@ -406,7 +298,10 @@ const AdminDashboard = () => {
       console.error("Error deleting floor:", error);
       toast({
         title: "Error",
-        description: "Failed to delete floor",
+        description:
+          error instanceof ApiError && error.status === 400
+            ? "This floor has existing rooms. Please remove all rooms before deleting the floor."
+            : "Failed to delete floor",
         variant: "destructive",
       });
     }
@@ -414,12 +309,7 @@ const AdminDashboard = () => {
 
   const deleteBuilding = async (buildingId: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from("buildings")
-        .delete()
-        .eq("id", buildingId);
-
-      if (error) throw error;
+      await apiClient.del(`/buildings/${buildingId}`);
 
       toast({
         title: "Success",
@@ -460,25 +350,32 @@ const AdminDashboard = () => {
     }
   };
 
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch =
-      booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.profiles?.full_name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      booking.room?.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredBookings = bookings
+    .filter((booking) => {
+      const matchesSearch =
+        booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        booking.teacher_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        booking.room_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesFilter =
-      filterStatus === "all" ||
-      (filterStatus === "upcoming" &&
-        getBookingStatus(booking).label === "Upcoming") ||
-      (filterStatus === "completed" &&
-        getBookingStatus(booking).label === "Completed") ||
-      (filterStatus === "in-progress" &&
-        getBookingStatus(booking).label === "In Progress");
+      const matchesFilter =
+        filterStatus === "cancelled"
+          ? booking.status === "cancelled"
+          : booking.status !== "cancelled" &&
+            (filterStatus === "all" ||
+              (filterStatus === "upcoming" &&
+                getBookingStatus(booking).label === "Upcoming") ||
+              (filterStatus === "completed" &&
+                getBookingStatus(booking).label === "Completed") ||
+              (filterStatus === "in-progress" &&
+                getBookingStatus(booking).label === "In Progress"));
 
-    return matchesSearch && matchesFilter;
-  });
+      return matchesSearch && matchesFilter;
+    })
+    .sort(
+      (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+    );
 
   const filteredUsers = users.filter(
     (user) =>
@@ -490,14 +387,14 @@ const AdminDashboard = () => {
     (room) =>
       room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       room.room_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      room.floor?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      room.floor_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredFloors = floors.filter(
     (floor) =>
-      floor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      floor.number.toString().includes(searchTerm) ||
-      floor.building?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      floor.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (floor.number ?? floor.floor_number).toString().includes(searchTerm) ||
+      floor.building_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredBuildings = buildings.filter((building) =>
@@ -557,7 +454,7 @@ const AdminDashboard = () => {
           className="space-y-4 sm:space-y-6"
         >
           <div className="w-full overflow-x-auto">
-            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-5 gap-1 h-auto p-1">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-7 gap-1 h-auto p-1">
               <TabsTrigger
                 value="bookings"
                 className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
@@ -611,6 +508,13 @@ const AdminDashboard = () => {
                 <FileText className="h-4 w-4" />
                 Reports
               </TabsTrigger>
+              <TabsTrigger
+                value="timetable-import"
+                className="flex items-center gap-2 whitespace-nowrap py-2 px-3 text-xs sm:text-sm"
+              >
+                <UploadCloud className="h-4 w-4" />
+                Timetable Import
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -654,6 +558,7 @@ const AdminDashboard = () => {
                   <SelectItem value="upcoming">Upcoming</SelectItem>
                   <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -699,15 +604,16 @@ const AdminDashboard = () => {
                           </CardTitle>
                           <CardDescription className="flex items-center mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {booking.room?.name} • {booking.room?.floor?.name}
+                            {booking.room_name}
                           </CardDescription>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Badge variant={getBookingStatus(booking).variant}>
-                            {getBookingStatus(booking).label}
-                          </Badge>
-                          {(booking.profiles as any)?.is_admin && (
-                            <Badge variant="secondary">Admin</Badge>
+                          {booking.status === "cancelled" ? (
+                            <Badge variant="destructive">Cancelled</Badge>
+                          ) : (
+                            <Badge variant={getBookingStatus(booking).variant}>
+                              {getBookingStatus(booking).label}
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -725,8 +631,8 @@ const AdminDashboard = () => {
                         </div>
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Users className="h-4 w-4 mr-2" />
-                          {booking.profiles?.full_name} (
-                          {booking.profiles?.email})
+                          {booking.teacher_name} (
+                          {booking.teacher_email})
                         </div>
                         {booking.description && (
                           <p className="text-sm text-muted-foreground mt-2">
@@ -965,7 +871,7 @@ const AdminDashboard = () => {
                           <CardTitle className="text-lg">{room.name}</CardTitle>
                           <CardDescription className="flex items-center mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {room.floor?.name}
+                            {room.floor_name}
                           </CardDescription>
                         </div>
                         <Badge
@@ -1123,11 +1029,11 @@ const AdminDashboard = () => {
                       <CardHeader>
                         <CardTitle className="text-lg">{floor.name}</CardTitle>
                         <CardDescription className="flex items-center space-x-2">
-                          <span>Floor Number: {floor.number}</span>
-                          {floor.building && (
+                          <span>Floor Number: {floor.number ?? floor.floor_number}</span>
+                          {floor.building_name && (
                             <>
                               <span>•</span>
-                              <span>{floor.building.name}</span>
+                              <span>{floor.building_name}</span>
                             </>
                           )}
                         </CardDescription>
@@ -1139,7 +1045,7 @@ const AdminDashboard = () => {
                               Building:
                             </span>
                             <Badge variant="outline">
-                              {floor.building?.name || "No building assigned"}
+                              {floor.building_name || "No building assigned"}
                             </Badge>
                           </div>
                           <div className="flex items-center justify-between text-sm">
@@ -1345,6 +1251,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="reports" className="space-y-4">
             <ReportGenerator />
+          </TabsContent>
+
+          <TabsContent value="timetable-import" className="space-y-4">
+            <TimetableImportPanel />
           </TabsContent>
         </Tabs>
 

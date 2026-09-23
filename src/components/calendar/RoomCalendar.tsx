@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { Room, Booking, Floor, Building } from "@/types/database";
+import { Link } from "react-router-dom";
+import { apiClient } from "@/lib/apiClient";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { Room, Booking, Floor, Building } from "@/types/api";
 import { useAuth } from "@/hooks/useAuth";
 import {
   format,
@@ -178,13 +180,11 @@ export default function RoomCalendar({
   useEffect(() => {
     if (user) {
       const fetchUserProfile = async () => {
-        const { data } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", user.id)
-          .single();
-        if (data) {
-          setUserProfile(data);
+        const { user: profile } = await apiClient.get<{ success: boolean; user: { full_name: string } }>(
+          "/user/me",
+        );
+        if (profile) {
+          setUserProfile(profile);
         }
       };
       fetchUserProfile();
@@ -192,23 +192,19 @@ export default function RoomCalendar({
   }, [user]);
 
   useEffect(() => {
-    if (selectedRoom) {
+    if (selectedRoom && user) {
       fetchEffectiveTimetable();
     }
-  }, [currentWeek, selectedRoom]);
+  }, [currentWeek, selectedRoom, user]);
 
   useEffect(() => {
     // Fetch buildings once for discovery view
     const fetchBuildings = async () => {
       try {
-        const { data, error } = await (supabase as any)
-          .from("buildings")
-          .select("*")
-          .eq("is_active", true)
-          .order("name");
-        if (error) throw error;
-        const list = (data || []) as Building[];
-        setBuildings(list);
+        const { buildings: list } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+          "/buildings",
+        );
+        setBuildings(list || []);
         // Default to Vyas if present
         const vyas = list.find((b) => b.name?.toLowerCase() === "vyas");
         setSelectedBuildingId((vyas || list[0])?.id || "");
@@ -225,13 +221,10 @@ export default function RoomCalendar({
     const fetchFloors = async () => {
       if (!selectedBuildingId) return;
       try {
-        const { data, error } = await (supabase as any)
-          .from("floors")
-          .select(`*, rooms (*), building:buildings(*)`)
-          .eq("building_id", selectedBuildingId)
-          .order("number");
-        if (error) throw error;
-        setFloors((data as any) || []);
+        const { floors: list } = await apiClient.get<{ success: boolean; floors: any[] }>(
+          `/buildings/${selectedBuildingId}/floors`,
+        );
+        setFloors(list || []);
       } catch (e) {
         console.error("Error loading floors", e);
       }
@@ -244,7 +237,7 @@ export default function RoomCalendar({
   const fetchEffectiveTimetable = async (
     options: { silent?: boolean } = {},
   ) => {
-    if (!selectedRoom) return [];
+    if (!selectedRoom || !user) return [];
 
     if (!options.silent) {
       setLoading(true);
@@ -254,129 +247,17 @@ export default function RoomCalendar({
       // Calculate week start (Monday)
       const weekStartDate = format(weekStart, "yyyy-MM-dd");
 
-      // DEBUG: Fetch all templates directly from database to compare
-      const { data: allTemplates, error: templatesError } = await (
-        supabase as any
-      )
-        .from("room_timetable_templates")
-        .select("*")
-        .eq("room_id", selectedRoom.id)
-        .eq("is_active", true);
-
-      // DEBUG: Check for exceptions that might cancel templates
-      const { data: exceptions, error: exceptionsError } = await (
-        supabase as any
-      )
-        .from("room_timetable_template_exceptions")
-        .select("*")
-        .eq("week_start_date", weekStartDate);
-
-      if (!templatesError && allTemplates) {
-        console.log("🔍 ALL ACTIVE TEMPLATES IN DATABASE:", {
-          count: allTemplates.length,
-          templates: allTemplates.map((t: any) => {
-            // Calculate if this template should show this week
-            const templateWeekday = t.weekday;
-            const weekHasThisWeekday = weekDays.some((d) => {
-              const dWeekday = d.getDay() === 0 ? 6 : d.getDay() - 1;
-              return dWeekday === templateWeekday;
-            });
-
-            // Check repeat interval
-            const weekDiff = Math.floor(
-              (weekStart.getTime() - new Date(t.effective_from).getTime()) /
-                (7 * 24 * 60 * 60 * 1000),
-            );
-            const shouldShowByRepeat =
-              t.repeat_interval_weeks === 1 ||
-              weekDiff % t.repeat_interval_weeks === 0;
-
-            // Check if cancelled
-            const isCancelled = exceptions?.some(
-              (e: any) => e.template_id === t.id,
-            );
-
-            return {
-              id: t.id,
-              title: t.title,
-              weekday: t.weekday,
-              start_time: t.start_time,
-              effective_from: t.effective_from,
-              repeat_interval_weeks: t.repeat_interval_weeks,
-              teacher: t.teacher_name,
-              shouldShow:
-                weekHasThisWeekday && shouldShowByRepeat && !isCancelled,
-              weekHasWeekday: weekHasThisWeekday,
-              shouldShowByRepeat,
-              isCancelled,
-              weekDiff,
-            };
-          }),
-          currentWeekStart: weekStartDate,
-          weekDays: weekDays.map((d) => ({
-            date: format(d, "yyyy-MM-dd"),
-            weekday: d.getDay() === 0 ? 6 : d.getDay() - 1, // Convert to 0-6 (Mon-Sun)
-          })),
-          exceptions: exceptions || [],
-        });
-      }
-
-      // Call the effective timetable function
-      const { data, error } = await (supabase as any).rpc(
-        "get_effective_timetable",
-        {
-          p_room_id: selectedRoom.id,
-          p_week_start: weekStartDate,
-        },
+      const { slots } = await apiClient.get<{ success: boolean; slots: any[] }>(
+        `/room/${selectedRoom.id}/effective-timetable?weekStart=${weekStartDate}`,
       );
-
-      if (error) {
-        console.error("Effective timetable error:", error);
-        throw error;
-      }
-
-      const timetable = (data || []) as any[];
-      const templates = timetable.filter((s) => s.slot_type === "template");
-      console.log("✅ EFFECTIVE TIMETABLE FROM SQL FUNCTION:", {
-        count: timetable.length,
-        templateCount: templates.length,
-        templates: templates.map((t) => ({
-          id: t.template_id,
-          title: t.title,
-          start_time: t.start_time,
-          teacher: t.teacher_name,
-          weekday:
-            new Date(t.start_time).getDay() === 0
-              ? 6
-              : new Date(t.start_time).getDay() - 1,
-        })),
-        bookings: timetable.filter((s) => s.slot_type === "booking").length,
-        cancelled: timetable.filter(
-          (s) => s.slot_type === "exception_cancelled",
-        ).length,
-        weekStart: weekStartDate,
-      });
+      const timetable = slots || [];
       setEffectiveTimetable(timetable);
 
       // Also fetch regular bookings for the sidebar/details view
-      const { data: bookingsData, error: bookingsError } = await (
-        supabase as any
-      )
-        .from("bookings")
-        .select(
-          `
-          *,
-          profiles:profiles!bookings_teacher_id_fkey(full_name, email)
-        `,
-        )
-        .eq("room_id", selectedRoom.id)
-        .eq("status", "confirmed")
-        .gte("start_time", weekStart.toISOString())
-        .lte("start_time", weekEnd.toISOString());
-
-      if (bookingsError) throw bookingsError;
-      const list = (bookingsData || []) as Booking[];
-      setBookings(list);
+      const { bookings: bookingsData } = await apiClient.get<{ success: boolean; bookings: Booking[] }>(
+        `/booking/room/${selectedRoom.id}?weekStart=${weekStart.toISOString()}&weekEnd=${weekEnd.toISOString()}`,
+      );
+      setBookings(bookingsData || []);
 
       return timetable;
     } catch (error) {
@@ -396,6 +277,26 @@ export default function RoomCalendar({
 
   // Keep fetchBookings for backward compatibility
   const fetchBookings = fetchEffectiveTimetable;
+
+  // Keep the calendar live: refresh when another user books/cancels in this room.
+  const fetchEffectiveTimetableRef = useRef(fetchEffectiveTimetable);
+  fetchEffectiveTimetableRef.current = fetchEffectiveTimetable;
+
+  useEffect(() => {
+    if (!selectedRoom || !user) return;
+
+    const socket = connectSocket();
+    socket.emit("join:room", selectedRoom.id);
+    const handleLiveUpdate = () => fetchEffectiveTimetableRef.current({ silent: true });
+    socket.on("room:booked", handleLiveUpdate);
+    socket.on("booking:cancelled", handleLiveUpdate);
+
+    return () => {
+      socket.off("room:booked", handleLiveUpdate);
+      socket.off("booking:cancelled", handleLiveUpdate);
+      disconnectSocket();
+    };
+  }, [selectedRoom?.id, user]);
 
   const getSlotForTime = (day: Date, timeSlot: string) => {
     // Create the time slot window (1 hour slot) in local time
@@ -695,6 +596,20 @@ export default function RoomCalendar({
     );
   }
 
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center px-4">
+        <AlertCircle className="h-10 w-10 text-muted-foreground" />
+        <p className="text-muted-foreground">
+          Sign in to view {selectedRoom.name}'s schedule and make a booking.
+        </p>
+        <Link to="/auth">
+          <Button size="sm">Sign In</Button>
+        </Link>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -985,19 +900,19 @@ export default function RoomCalendar({
                             className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
                               event.isCancelled
                                 ? showCancelled
-                                  ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                  ? "bg-yellow-100/70 dark:bg-yellow-900/20 text-yellow-800/80 dark:text-yellow-300/80 border-yellow-300/60 dark:border-yellow-800/60 border-dashed border-l-4 border-l-yellow-500 dark:border-l-yellow-400 opacity-80"
                                   : "hidden"
                                 : event.isPast
                                   ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
                                   : event.isLunchTime
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                    ? "bg-orange-200 dark:bg-orange-900/45 text-orange-900 dark:text-orange-100 border-orange-300 dark:border-orange-600"
                                     : event.isTemplate
-                                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                      ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 border-l-4 border-l-purple-600 dark:border-l-purple-400"
                                       : event.isBooking
                                         ? event.isUserSlot
-                                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                          : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                        : "bg-gray-100 dark:bg-gray-800"
+                                          ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 border-l-4 border-l-blue-600 dark:border-l-blue-400"
+                                          : "bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 border-teal-200 dark:border-teal-700 border-l-4 border-l-teal-600 dark:border-l-teal-400"
+                                        : "bg-gray-200 dark:bg-gray-900"
                             }`}
                             style={{
                               top: `${event.startPosition}px`,
@@ -1325,19 +1240,19 @@ export default function RoomCalendar({
                                 className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
                                   event.isCancelled
                                     ? showCancelled
-                                      ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                      ? "bg-yellow-100/70 dark:bg-yellow-900/20 text-yellow-800/80 dark:text-yellow-300/80 border-yellow-300/60 dark:border-yellow-800/60 border-dashed border-l-4 border-l-yellow-500 dark:border-l-yellow-400 opacity-80"
                                       : "hidden"
                                     : event.isPast
                                       ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
                                       : event.isLunchTime
-                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                        ? "bg-orange-200 dark:bg-orange-900/45 text-orange-900 dark:text-orange-100 border-orange-300 dark:border-orange-600"
                                         : event.isTemplate
-                                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                          ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 border-l-4 border-l-purple-600 dark:border-l-purple-400"
                                           : event.isBooking
                                             ? event.isUserSlot
-                                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                            : "bg-gray-100 dark:bg-gray-800"
+                                              ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 border-l-4 border-l-blue-600 dark:border-l-blue-400"
+                                              : "bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 border-teal-200 dark:border-teal-700 border-l-4 border-l-teal-600 dark:border-l-teal-400"
+                                            : "bg-gray-200 dark:bg-gray-900"
                                 }`}
                                 style={{
                                   top: `${event.startPosition}px`,
@@ -1479,25 +1394,33 @@ export default function RoomCalendar({
       {/* Legend */}
       <Card className="bg-muted/30">
         <CardContent className="pt-4 sm:pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
               <span>Available</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded"></div>
+              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700 rounded"></div>
               <span>Template</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded border-dashed"></div>
+              <div className="w-4 h-4 bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded"></div>
+              <span>My booking</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-teal-100 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-700 rounded"></div>
+              <span>Others' booking</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-yellow-100/70 dark:bg-yellow-900/20 border border-yellow-300/60 dark:border-yellow-800/60 rounded border-dashed"></div>
               <span>Cancelled</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded"></div>
-              <span>Booked</span>
+              <div className="w-4 h-4 bg-orange-200 dark:bg-orange-900/45 border border-orange-300 dark:border-orange-600 rounded"></div>
+              <span>Lunch time</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"></div>
+              <div className="w-4 h-4 bg-gray-200 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded"></div>
               <span>Unavailable</span>
             </div>
           </div>

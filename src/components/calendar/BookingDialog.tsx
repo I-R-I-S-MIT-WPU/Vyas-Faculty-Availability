@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { Room, Profile } from "@/types/database";
+import { apiClient } from "@/lib/apiClient";
+import { getBookingErrorMessage } from "@/lib/bookingErrors";
+import { Room, Profile, Booking } from "@/types/api";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { format, addHours, isWeekend, isBefore } from "date-fns";
@@ -57,78 +58,19 @@ export default function BookingDialog({
   const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const { user } = useAuth();
 
-  // Function to check for booking collisions using effective timetable
-  const checkBookingCollision = async (
-    startTime: Date,
-    endTime: Date,
-  ): Promise<boolean> => {
-    try {
-      // Use the effective timetable function to check availability
-      const { data, error } = await (supabase as any).rpc(
-        "check_slot_availability",
-        {
-          p_room_id: room.id,
-          p_start_time: startTime.toISOString(),
-          p_end_time: endTime.toISOString(),
-          p_exclude_booking_id: null,
-        },
-      );
-
-      if (error) throw error;
-
-      // Function returns true if available, false if not
-      return !data;
-    } catch (error) {
-      console.error("Error checking booking collision:", error);
-      return false; // If we can't check, allow the booking to proceed
-    }
-  };
-
-  // Function to check for user booking conflicts (confirmed only)
-  const checkUserBookingConflict = async (
-    startTime: Date,
-    endTime: Date,
-  ): Promise<boolean> => {
-    if (!user) return false;
-
-    try {
-      // Get all bookings for this user
-      const { data, error } = await (supabase as any)
-        .from("bookings")
-        .select("*")
-        .eq("teacher_id", user.id)
-        .eq("status", "confirmed");
-
-      if (error) throw error;
-
-      // Check for overlapping bookings manually
-      const hasConflict = data?.some((booking) => {
-        const bookingStart = new Date(booking.start_time);
-        const bookingEnd = new Date(booking.end_time);
-
-        // Check if the new booking overlaps with existing booking
-        // Overlap occurs when: new_start < existing_end AND new_end > existing_start
-        return startTime < bookingEnd && endTime > bookingStart;
-      });
-
-      return hasConflict || false;
-    } catch (error) {
-      console.error("Error checking user booking conflict:", error);
-      return false;
-    }
-  };
-
+  // Mirrors the backend's validate_booking_times trigger so obvious violations
+  // are caught before a round-trip (the trigger is still the source of truth).
   const validateBooking = (startTime: Date, endTime: Date): string | null => {
     const now = new Date();
 
-    // Check if booking is in the past
     if (isBefore(startTime, now)) {
       return "Cannot create bookings in the past";
     }
 
-    // Weekends are allowed
+    if (isWeekend(startTime)) {
+      return "Bookings are not allowed on weekends";
+    }
 
-    // Check if booking is within allowed hours (7:30 AM to 10:30 PM)
     const startHour = startTime.getHours();
     const startMinute = startTime.getMinutes();
     const endHour = endTime.getHours();
@@ -170,187 +112,30 @@ export default function BookingDialog({
         return;
       }
 
-      // Check for room booking collision
-      const hasRoomCollision = await checkBookingCollision(startTime, endTime);
-      if (hasRoomCollision) {
-        toast({
-          title: "Room Already Booked",
-          description:
-            "This time slot conflicts with an existing booking for this room. Please choose a different time or duration.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Check for user booking conflict
-      const hasUserConflict = await checkUserBookingConflict(
-        startTime,
-        endTime,
-      );
-      if (hasUserConflict) {
-        toast({
-          title: "Personal Schedule Conflict",
-          description:
-            "You already have a booking that overlaps with this time period. Please choose a different time or duration.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      const { data: inserted, error } = await supabase
-        .from("bookings")
-        .insert({
-          room_id: room.id,
-          teacher_id: user.id,
+      let inserted: Booking;
+      try {
+        const res = await apiClient.post<{ success: boolean; booking: Booking }>("/booking", {
+          roomId: room.id,
           title,
-          description: description || null,
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          class_division: classDivision || null,
-          panel: panel || null,
-          year_course: yearCourse || null,
-          status: room.requires_approval ? "pending" : "confirmed",
-        })
-        .select("id, title, description, start_time, end_time")
-        .single();
-
-      if (error) {
-        // Handle specific database constraint errors
-        if (error.message.includes("User already has a booking")) {
-          toast({
-            title: "Personal Schedule Conflict",
-            description:
-              "You already have a booking that overlaps with this time period.",
-            variant: "destructive",
-          });
-        } else if (
-          error.message.includes("Cannot create bookings in the past")
-        ) {
-          toast({
-            title: "Invalid Booking Time",
-            description: "Cannot create bookings in the past.",
-            variant: "destructive",
-          });
-        } else if (
-          error.message.includes("Bookings cannot start before 7:30 AM")
-        ) {
-          toast({
-            title: "Invalid Start Time",
-            description: "Bookings cannot start before 7:30 AM.",
-            variant: "destructive",
-          });
-        } else if (
-          error.message.includes("Bookings cannot end after 10:30 PM")
-        ) {
-          toast({
-            title: "Invalid End Time",
-            description: "Bookings cannot end after 10:30 PM.",
-            variant: "destructive",
-          });
-        } else {
-          throw error;
-        }
+          description: description || undefined,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          classDivision: classDivision || undefined,
+          panel: panel || undefined,
+          yearCourse: yearCourse || undefined,
+        });
+        inserted = res.booking;
+      } catch (err) {
+        const { title: errTitle, description: errDescription } = getBookingErrorMessage(err);
+        toast({ title: errTitle, description: errDescription, variant: "destructive" });
         setLoading(false);
         return;
       }
 
-      // Insert invitees if any
-      const bookingId = inserted?.id;
-      if (bookingId && selectedInvitees.length > 0) {
-        const inviteRows = selectedInvitees.map((p) => ({
-          booking_id: bookingId,
-          invitee_id: p.id,
-        }));
-        const { error: inviteErr } = await (supabase as any)
-          .from("booking_invitees")
-          .insert(inviteRows as any);
-        if (inviteErr) {
-          console.error("Failed to add invitees", inviteErr);
-        }
-      }
-
-      // Send emails using external email service
-      if (!room.requires_approval && sendEmails) {
-        try {
-          // Prepare email data
-          const startTime = new Date(inserted.start_time);
-          const endTime = new Date(inserted.end_time);
-          const date = startTime.toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          });
-          const time = startTime.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          });
-          const duration = Math.round(
-            (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60),
-          ); // hours
-
-          // Get all email addresses
-          const allEmails = [
-            ...selectedInvitees.map((invitee) => invitee.email),
-            ...extraEmails,
-          ].filter(Boolean);
-
-          if (allEmails.length > 0) {
-            // Validate that we have all required data
-            if (!inserted.title || !date || !time || !room.name) {
-              console.warn("Missing required booking data for email:", {
-                title: inserted.title,
-                date,
-                time,
-                room: room.name,
-              });
-              return;
-            }
-
-            // Send email using the curl format you provided
-            const emailPayload = {
-              emails: allEmails,
-              bookingName: inserted.title,
-              date: date,
-              time: time,
-              room: room.name,
-              duration: `${duration} hour${duration !== 1 ? "s" : ""}`,
-              additionalInfo:
-                inserted.description || "No Additional Description",
-              userEmail: user.email,
-            };
-
-            const EMAIL_SERVICE_URL =
-              "https://oacrbzapchtoeshmmhrf.supabase.co/functions/v1/send-booking-emails";
-            const AUTH_TOKEN =
-              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hY3JiemFwY2h0b2VzaG1taHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwMzI3MDEsImV4cCI6MjA2OTYwODcwMX0.0JDDizFguhGhPT5ko3alQTEPtVHrq0AYKmqwzl0C-lg";
-
-            // Debug: Log the payload being sent
-            console.log("Sending email payload:", emailPayload);
-
-            const res = await fetch(EMAIL_SERVICE_URL, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${AUTH_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(emailPayload),
-            });
-
-            if (!res.ok) {
-              const errorText = await res.text().catch(() => "");
-              console.warn("Email service call failed:", res.status, errorText);
-            } else {
-              console.log("Emails sent successfully");
-            }
-          }
-        } catch (emailErr) {
-          console.warn("Email sending failed:", emailErr);
-        }
-      }
+      // TODO: migrate to backend — no booking_invitees endpoint exists yet on Vyas-Backend.
+      // The Supabase "send-booking-emails" edge function this used to call has been
+      // decommissioned (unauthenticated, service-role key, open CORS); wire this up to
+      // a POST /booking/:id/invite endpoint on Vyas-Backend once it exists.
 
       toast({
         title: room.requires_approval ? "Submitted for approval" : "Success",
@@ -394,22 +179,21 @@ export default function BookingDialog({
         setInviteSearchResults([]);
         return;
       }
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .or(`full_name.ilike.%${inviteSearch}%,email.ilike.%${inviteSearch}%`)
-        .limit(8);
-      if (cancelled) return;
-      if (error) {
-        console.error("Invite search failed", error);
-        setInviteSearchResults([]);
-      } else {
+      try {
+        const { users: data } = await apiClient.get<{ success: boolean; users: Profile[] }>(
+          `/user/search?q=${encodeURIComponent(inviteSearch)}`,
+        );
+        if (cancelled) return;
         // Exclude current user and already selected
         const selectedIds = new Set(selectedInvitees.map((s) => s.id));
         const filtered = (data || []).filter(
           (p) => p.id !== user?.id && !selectedIds.has(p.id),
-        ) as Profile[];
+        );
         setInviteSearchResults(filtered);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Invite search failed", error);
+        setInviteSearchResults([]);
       }
     };
     const t = setTimeout(run, 250);
@@ -576,12 +360,16 @@ export default function BookingDialog({
             <Label htmlFor="invitees" className="text-sm">
               Invite people
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Invites aren't sent yet — this feature is temporarily unavailable.
+            </p>
             <Input
               id="invitees"
               placeholder="Search by name or email"
               value={inviteSearch}
               onChange={(e) => setInviteSearch(e.target.value)}
               className="h-9"
+              disabled
             />
             {inviteSearchResults.length > 0 && (
               <div className="border rounded-md divide-y">
@@ -636,8 +424,9 @@ export default function BookingDialog({
                   }
                 }}
                 className="h-9"
+                disabled
               />
-              <Button type="button" variant="secondary" onClick={addExtraEmail}>
+              <Button type="button" variant="secondary" onClick={addExtraEmail} disabled>
                 Add
               </Button>
             </div>
@@ -665,7 +454,7 @@ export default function BookingDialog({
 
           <div className="flex items-center justify-between pt-1">
             <Label className="text-sm">Send email notifications</Label>
-            <Switch checked={sendEmails} onCheckedChange={setSendEmails} />
+            <Switch checked={sendEmails} onCheckedChange={setSendEmails} disabled />
           </div>
 
           {/* Booking Information Alert */}

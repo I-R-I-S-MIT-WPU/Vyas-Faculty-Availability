@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Floor, Building } from "@/types/database";
+import { apiClient, ApiError } from "@/lib/apiClient";
+import { Floor, Building } from "@/types/api";
 import {
   Dialog,
   DialogContent,
@@ -51,13 +51,10 @@ export const FloorManagementDialog = ({
 
   const fetchBuildings = async () => {
     try {
-      const { data, error } = await supabase
-        .from("buildings")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setBuildings(data || []);
+      const { buildings: list } = await apiClient.get<{ success: boolean; buildings: Building[] }>(
+        "/buildings",
+      );
+      setBuildings(list || []);
     } catch (error) {
       console.error("Error fetching buildings:", error);
       toast({
@@ -72,8 +69,8 @@ export const FloorManagementDialog = ({
     if (open) {
       if (floor) {
         setFormData({
-          number: floor.number.toString(),
-          name: floor.name,
+          number: (floor.number ?? floor.floor_number).toString(),
+          name: floor.name || "",
           building_id: floor.building_id || "",
         });
       } else {
@@ -113,19 +110,14 @@ export const FloorManagementDialog = ({
     setLoading(true);
     try {
       const floorData = {
-        number: floorNumber,
+        floor_number: floorNumber,
         name: formData.name.trim(),
-        building_id: formData.building_id,
       };
 
       if (floor) {
-        // Update existing floor
-        const { error } = await supabase
-          .from("floors")
-          .update(floorData)
-          .eq("id", floor.id);
-
-        if (error) throw error;
+        // Update existing floor (NOTE: backend's PUT /buildings/floor/:id doesn't support
+        // moving a floor to a different building — building_id changes here won't take effect)
+        await apiClient.put(`/buildings/floor/${floor.id}`, floorData);
 
         toast({
           title: "Success",
@@ -133,9 +125,7 @@ export const FloorManagementDialog = ({
         });
       } else {
         // Create new floor
-        const { error } = await supabase.from("floors").insert([floorData]);
-
-        if (error) throw error;
+        await apiClient.post(`/buildings/${formData.building_id}/floor`, floorData);
 
         toast({
           title: "Success",
@@ -145,11 +135,11 @@ export const FloorManagementDialog = ({
 
       onFloorSaved();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving floor:", error);
 
-      // Handle unique constraint violation
-      if (error?.code === "23505") {
+      // Backend returns 409 for duplicate floor number within a building
+      if (error instanceof ApiError && error.status === 409) {
         toast({
           title: "Error",
           description:
