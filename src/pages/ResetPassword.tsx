@@ -52,7 +52,12 @@ export default function ResetPassword() {
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof ApiError ? err.message : "Failed to reset password.",
+        description:
+          err instanceof ApiError && err.status === 400 && /invalid|expired/i.test(err.message)
+            ? "This link is no longer valid — request a new one."
+            : err instanceof ApiError
+              ? err.message
+              : "Failed to reset password.",
         variant: "destructive",
       });
     }

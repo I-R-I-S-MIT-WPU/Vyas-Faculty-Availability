@@ -60,7 +60,12 @@ export default function TemplateExceptionDialog({
       console.error("Error creating exception:", error);
       toast({
         title: "Error",
-        description: error instanceof ApiError ? error.message : "Failed to cancel class for this week",
+        description:
+          error instanceof ApiError && error.status === 403
+            ? "Ask an admin to link you to this slot."
+            : error instanceof ApiError
+              ? error.message
+              : "Failed to cancel class for this week",
         variant: "destructive",
       });
     } finally {

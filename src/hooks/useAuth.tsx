@@ -4,6 +4,7 @@ import {
   signIn as signInRequest,
   signUp as signUpRequest,
   signOut as signOutRequest,
+  signOutEverywhere as signOutEverywhereRequest,
   verifyEmail as verifyEmailRequest,
   resendVerification as resendVerificationRequest,
   completeOAuthLogin as completeOAuthLoginRequest,
@@ -27,10 +28,11 @@ interface AuthContextType {
     password: string,
     fullName: string
   ) => Promise<{ error: ApiError | null; requiresVerification: boolean; email: string }>;
-  verifyEmail: (email: string, code: string) => Promise<{ error: ApiError | null }>;
+  verifyEmail: (email: string, code: string, password: string) => Promise<{ error: ApiError | null }>;
   resendVerification: (email: string) => Promise<{ error: ApiError | null }>;
   completeOAuthLogin: () => Promise<{ error: ApiError | null }>;
   signOut: () => Promise<void>;
+  signOutEverywhere: () => Promise<{ error: ApiError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -43,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
   resendVerification: async () => ({ error: null }),
   completeOAuthLogin: async () => ({ error: null }),
   signOut: async () => {},
+  signOutEverywhere: async () => ({ error: null }),
 });
 
 export const useAuth = () => {
@@ -80,8 +83,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error, requiresVerification, email: verifiedEmail };
   };
 
-  const verifyEmail = async (email: string, code: string) => {
-    const { error } = await verifyEmailRequest(email, code);
+  const verifyEmail = async (email: string, code: string, password: string) => {
+    const { error } = await verifyEmailRequest(email, code, password);
     if (!error) setStored(getCurrentUser());
     return { error };
   };
@@ -101,6 +104,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setStored(null);
   };
 
+  const signOutEverywhere = async () => {
+    const { error } = await signOutEverywhereRequest();
+    if (!error) setStored(null);
+    return { error };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -113,6 +122,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         resendVerification,
         completeOAuthLogin,
         signOut,
+        signOutEverywhere,
       }}
     >
       {children}

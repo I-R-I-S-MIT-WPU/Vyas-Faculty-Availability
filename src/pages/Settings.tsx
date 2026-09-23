@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, ApiError } from "@/lib/apiClient";
 import { Profile } from "@/types/api";
 import Header from "@/components/layout/Header";
 import {
@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/dialog";
 
 const Settings = () => {
-  const { user } = useAuth();
+  const { user, signOutEverywhere } = useAuth();
   const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,7 @@ const Settings = () => {
 
   // Change password dialog
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
@@ -106,7 +107,7 @@ const Settings = () => {
       console.error("Error updating profile:", error);
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: error instanceof ApiError ? error.message : "Failed to update profile",
         variant: "destructive",
       });
     } finally {
@@ -114,15 +115,34 @@ const Settings = () => {
     }
   };
 
+  const handleLogoutEverywhere = async () => {
+    setLogoutAllLoading(true);
+    const { error } = await signOutEverywhere();
+    setLogoutAllLoading(false);
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not log out of all devices. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // This device's session is revoked too — send them back to sign in.
+    window.location.href = "/auth";
+  };
+
   const handleChangePassword = async () => {
     setResetLoading(true);
     try {
       await apiClient.post("/user/forgot-password", { email: user!.email });
       setResetSent(true);
-    } catch {
+    } catch (err) {
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again.",
+        description:
+          err instanceof ApiError && err.status === 429
+            ? "Too many requests. Please try again later."
+            : "Something went wrong. Please try again.",
         variant: "destructive",
       });
     }
@@ -186,6 +206,7 @@ const Settings = () => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your full name"
+                      maxLength={100}
                     />
                   </div>
 
@@ -366,6 +387,23 @@ const Settings = () => {
               >
                 Change Password
               </Button>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={logoutAllLoading}
+                  onClick={handleLogoutEverywhere}
+                >
+                  {logoutAllLoading ? "Logging out..." : "Log Out of All Devices"}
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  Signs you out everywhere, including this device. Use this if you
+                  think someone else has access to your account.
+                </p>
+              </div>
 
               <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
                 <DialogContent>

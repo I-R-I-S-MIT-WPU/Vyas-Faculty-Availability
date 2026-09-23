@@ -27,7 +27,7 @@ import {
   parseISO,
 } from "date-fns";
 import { CalendarIcon, Download, FileText } from "lucide-react";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 interface ReportGeneratorProps {
   className?: string;
@@ -74,16 +74,21 @@ export const ReportGenerator = ({ className }: ReportGeneratorProps) => {
     startDate: Date,
     endDate: Date
   ): Promise<Booking[]> => {
-    // GET /booking/admin/all has no date-range filter that matches what we need here,
-    // so fetch everything and filter client-side (same semantics as the old Supabase query).
-    const { data } = await apiClient.get<AdminBookingsResponse>("/booking/admin/all?limit=10000");
-    return (data || [])
-      .filter((b) => {
-        const start = parseISO(b.start_time);
-        const end = parseISO(b.end_time);
-        return start >= startDate && end <= endDate;
-      })
-      .sort((a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime());
+    // Filtered server-side by date range. Equivalent to the old fetch-everything
+    // -then-filter-client-side approach because a booking can't cross midnight
+    // (the validate_booking_times trigger confines it to 07:30–22:30 the same
+    // day), so filtering on start_time alone can't drop a booking the old
+    // `end <= endDate` check would have kept.
+    const params = new URLSearchParams({
+      startDate: format(startDate, "yyyy-MM-dd"),
+      endDate: format(endDate, "yyyy-MM-dd"),
+      limit: "10000",
+    });
+    const { data } = await apiClient.get<AdminBookingsResponse>(`/booking/admin/all?${params}`);
+    // Server returns start_time DESC; the report reads chronologically.
+    return (data || []).sort(
+      (a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime()
+    );
   };
 
   // /booking/admin/all doesn't include room_type — looked up separately for the

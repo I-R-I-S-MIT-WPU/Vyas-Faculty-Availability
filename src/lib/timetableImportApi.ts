@@ -35,7 +35,7 @@ export const timetableImportApi = {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(body.error ?? "File upload failed");
+      throw new Error(body.message ?? body.error ?? "File upload failed");
     }
     return body as { success: boolean; files: TimetableImportFile[] };
   },

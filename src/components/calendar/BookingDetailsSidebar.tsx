@@ -25,7 +25,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, ApiError } from "@/lib/apiClient";
 import { getBookingErrorMessage } from "@/lib/bookingErrors";
 import { Booking, Room } from "@/types/api";
 import {
@@ -229,20 +229,30 @@ export default function BookingDetailsSidebar({
 
     setIsSaving(true);
     try {
-      await apiClient.patch(`/booking/${booking.id}`, {
-        title: formState.title.trim(),
-        description: formState.description.trim() || undefined,
-        class_division: formState.classDivision.trim() || undefined,
-        panel: formState.panel.trim() || undefined,
-        year_course: formState.yearCourse.trim() || undefined,
-        start_time: parsedStart.toISOString(),
-        end_time: parsedEnd.toISOString(),
-      });
+      const { booking: updated } = await apiClient.patch<{ success: boolean; booking: Booking }>(
+        `/booking/${booking.id}`,
+        {
+          title: formState.title.trim(),
+          description: formState.description.trim() || undefined,
+          class_division: formState.classDivision.trim() || undefined,
+          panel: formState.panel.trim() || undefined,
+          year_course: formState.yearCourse.trim() || undefined,
+          start_time: parsedStart.toISOString(),
+          end_time: parsedEnd.toISOString(),
+        },
+      );
 
-      toast({
-        title: "Booking updated",
-        description: "Your event details were saved successfully.",
-      });
+      if (updated.status === "pending" && booking.status !== "pending") {
+        toast({
+          title: "Sent for re-approval",
+          description: "Your change was sent for re-approval.",
+        });
+      } else {
+        toast({
+          title: "Booking updated",
+          description: "Your event details were saved successfully.",
+        });
+      }
       setIsEditing(false);
       await onBookingUpdated?.(booking.id);
     } catch (err) {
@@ -306,7 +316,12 @@ export default function BookingDetailsSidebar({
       console.error("Failed to cancel template", err);
       toast({
         title: "Cancel failed",
-        description: err instanceof Error ? err.message : "Could not cancel this class.",
+        description:
+          err instanceof ApiError && err.status === 403
+            ? "Ask an admin to link you to this slot."
+            : err instanceof Error
+              ? err.message
+              : "Could not cancel this class.",
         variant: "destructive",
       });
     } finally {

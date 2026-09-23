@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/apiClient";
-import { Room, Floor, RoomTimetableTemplate } from "@/types/api";
+import { Room, Floor, RoomTimetableTemplate, Profile } from "@/types/api";
 import {
   Dialog,
   DialogContent,
@@ -93,6 +93,7 @@ export const RoomManagementDialog = ({
   const [templateForm, setTemplateForm] = useState({
     title: "",
     teacher_name: "",
+    teacher_profile_id: null as string | null,
     weekday: "0",
     start_time: "08:30",
     duration_minutes: "60",
@@ -100,6 +101,35 @@ export const RoomManagementDialog = ({
     effective_from: getDefaultEffectiveFrom(),
     notes: "",
   });
+  const [teacherSearchResults, setTeacherSearchResults] = useState<Profile[]>([]);
+
+  // Teacher picker: search /user/search as the admin types the teacher name,
+  // same debounced pattern as the invitee search in BookingDialog.tsx.
+  useEffect(() => {
+    let cancelled = false;
+    const query = templateForm.teacher_name.trim();
+    if (!query || templateForm.teacher_profile_id) {
+      setTeacherSearchResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const { users } = await apiClient.get<{ success: boolean; users: Profile[] }>(
+          `/user/search?q=${encodeURIComponent(query)}`,
+        );
+        if (!cancelled) setTeacherSearchResults(users || []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Teacher search failed:", error);
+          setTeacherSearchResults([]);
+        }
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [templateForm.teacher_name, templateForm.teacher_profile_id]);
 
   useEffect(() => {
     if (open) {
@@ -246,6 +276,7 @@ export const RoomManagementDialog = ({
     setTemplateForm({
       title: "",
       teacher_name: "",
+      teacher_profile_id: null,
       weekday: "0",
       start_time: "08:30",
       duration_minutes: "60",
@@ -300,6 +331,7 @@ export const RoomManagementDialog = ({
     try {
       const payload = {
         teacherName: templateForm.teacher_name.trim(),
+        teacherProfileId: templateForm.teacher_profile_id || undefined,
         title: templateForm.title.trim(),
         weekday,
         startTime: startTimeValue,
@@ -656,10 +688,42 @@ export const RoomManagementDialog = ({
                           setTemplateForm((prev) => ({
                             ...prev,
                             teacher_name: e.target.value,
+                            teacher_profile_id: null,
                           }))
                         }
-                        placeholder="Exact profile full name"
+                        placeholder="Search by name to link an account"
                       />
+                      {templateForm.teacher_profile_id ? (
+                        <p className="text-xs text-muted-foreground">
+                          Linked — this teacher can self-cancel this slot.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Not linked — pick a match below so the teacher can self-cancel.
+                        </p>
+                      )}
+                      {teacherSearchResults.length > 0 && (
+                        <div className="border rounded-md divide-y bg-background">
+                          {teacherSearchResults.map((p) => (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => {
+                                setTemplateForm((prev) => ({
+                                  ...prev,
+                                  teacher_name: p.full_name,
+                                  teacher_profile_id: p.id,
+                                }));
+                                setTeacherSearchResults([]);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-accent"
+                            >
+                              <div className="text-sm font-medium">{p.full_name}</div>
+                              <div className="text-xs text-muted-foreground">{p.email}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">Weekday *</Label>
@@ -810,6 +874,11 @@ export const RoomManagementDialog = ({
                                 Paused
                               </Badge>
                             )}
+                            {!template.teacher_profile_id && (
+                              <Badge variant="destructive" className="text-xs">
+                                Not linked
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {getWeekdayLabel(template.weekday)} ·{" "}
@@ -841,6 +910,7 @@ export const RoomManagementDialog = ({
                               setTemplateForm({
                                 title: template.title,
                                 teacher_name: template.teacher_name,
+                                teacher_profile_id: template.teacher_profile_id,
                                 weekday: template.weekday.toString(),
                                 start_time:
                                   template.start_time?.slice(0, 5) || "08:30",

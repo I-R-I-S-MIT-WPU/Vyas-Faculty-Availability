@@ -44,9 +44,9 @@ export const signUp = async (email: string, password: string, fullName: string) 
   }
 };
 
-export const verifyEmail = async (email: string, code: string) => {
+export const verifyEmail = async (email: string, code: string, password: string) => {
   try {
-    const data = await apiClient.post<AuthResponse>("/user/verify-email", { email, code });
+    const data = await apiClient.post<AuthResponse>("/user/verify-email", { email, code, password });
     storeUser(data.user);
     return { error: null };
   } catch (err) {
@@ -93,6 +93,18 @@ export const signOut = async () => {
     await apiClient.post("/user/logout");
   } catch {
     // cookie may already be invalid/expired — clear local state regardless
+  }
+  localStorage.removeItem(STORAGE_KEY);
+  return { error: null };
+};
+
+// Revokes every session for this account (bumps token_version server-side),
+// not just this browser's. Other devices lose access on their next request.
+export const signOutEverywhere = async () => {
+  try {
+    await apiClient.post("/user/logout-all");
+  } catch (err) {
+    return { error: err instanceof ApiError ? err : new ApiError("Failed to log out everywhere", 500) };
   }
   localStorage.removeItem(STORAGE_KEY);
   return { error: null };

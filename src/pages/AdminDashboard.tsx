@@ -133,6 +133,11 @@ const AdminDashboard = () => {
       });
       fetchAllBookings();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast({ title: "This booking changed", description: "Refreshing the list." });
+        fetchAllBookings();
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to approve booking",
@@ -147,6 +152,11 @@ const AdminDashboard = () => {
       toast({ title: "Denied", description: "Booking request denied." });
       fetchAllBookings();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast({ title: "This booking changed", description: "Refreshing the list." });
+        fetchAllBookings();
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to deny booking",

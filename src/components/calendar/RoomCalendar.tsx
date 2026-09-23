@@ -900,19 +900,19 @@ export default function RoomCalendar({
                             className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
                               event.isCancelled
                                 ? showCancelled
-                                  ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                  ? "bg-yellow-100/70 dark:bg-yellow-900/20 text-yellow-800/80 dark:text-yellow-300/80 border-yellow-300/60 dark:border-yellow-800/60 border-dashed border-l-4 border-l-yellow-500 dark:border-l-yellow-400 opacity-80"
                                   : "hidden"
                                 : event.isPast
                                   ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
                                   : event.isLunchTime
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                    ? "bg-orange-200 dark:bg-orange-900/45 text-orange-900 dark:text-orange-100 border-orange-300 dark:border-orange-600"
                                     : event.isTemplate
-                                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                      ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 border-l-4 border-l-purple-600 dark:border-l-purple-400"
                                       : event.isBooking
                                         ? event.isUserSlot
-                                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                          : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                        : "bg-gray-100 dark:bg-gray-800"
+                                          ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 border-l-4 border-l-blue-600 dark:border-l-blue-400"
+                                          : "bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 border-teal-200 dark:border-teal-700 border-l-4 border-l-teal-600 dark:border-l-teal-400"
+                                        : "bg-gray-200 dark:bg-gray-900"
                             }`}
                             style={{
                               top: `${event.startPosition}px`,
@@ -1240,19 +1240,19 @@ export default function RoomCalendar({
                                 className={`absolute rounded-md border p-1.5 sm:p-2 cursor-pointer transition-all hover:shadow-md z-20 overflow-hidden ${
                                   event.isCancelled
                                     ? showCancelled
-                                      ? "bg-yellow-50/30 dark:bg-yellow-900/10 text-yellow-700/70 dark:text-yellow-300/70 border-yellow-200/50 dark:border-yellow-800/50 border-dashed opacity-50"
+                                      ? "bg-yellow-100/70 dark:bg-yellow-900/20 text-yellow-800/80 dark:text-yellow-300/80 border-yellow-300/60 dark:border-yellow-800/60 border-dashed border-l-4 border-l-yellow-500 dark:border-l-yellow-400 opacity-80"
                                       : "hidden"
                                     : event.isPast
                                       ? "bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 border-gray-300 dark:border-gray-700 opacity-60"
                                       : event.isLunchTime
-                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700"
+                                        ? "bg-orange-200 dark:bg-orange-900/45 text-orange-900 dark:text-orange-100 border-orange-300 dark:border-orange-600"
                                         : event.isTemplate
-                                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                                          ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700 border-l-4 border-l-purple-600 dark:border-l-purple-400"
                                           : event.isBooking
                                             ? event.isUserSlot
-                                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700"
-                                              : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-                                            : "bg-gray-100 dark:bg-gray-800"
+                                              ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700 border-l-4 border-l-blue-600 dark:border-l-blue-400"
+                                              : "bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 border-teal-200 dark:border-teal-700 border-l-4 border-l-teal-600 dark:border-l-teal-400"
+                                            : "bg-gray-200 dark:bg-gray-900"
                                 }`}
                                 style={{
                                   top: `${event.startPosition}px`,
@@ -1394,25 +1394,33 @@ export default function RoomCalendar({
       {/* Legend */}
       <Card className="bg-muted/30">
         <CardContent className="pt-4 sm:pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
               <span>Available</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded"></div>
+              <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700 rounded"></div>
               <span>Template</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded border-dashed"></div>
+              <div className="w-4 h-4 bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded"></div>
+              <span>My booking</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-teal-100 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-700 rounded"></div>
+              <span>Others' booking</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-yellow-100/70 dark:bg-yellow-900/20 border border-yellow-300/60 dark:border-yellow-800/60 rounded border-dashed"></div>
               <span>Cancelled</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded"></div>
-              <span>Booked</span>
+              <div className="w-4 h-4 bg-orange-200 dark:bg-orange-900/45 border border-orange-300 dark:border-orange-600 rounded"></div>
+              <span>Lunch time</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"></div>
+              <div className="w-4 h-4 bg-gray-200 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded"></div>
               <span>Unavailable</span>
             </div>
           </div>

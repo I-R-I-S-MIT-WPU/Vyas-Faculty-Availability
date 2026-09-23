@@ -36,6 +36,12 @@ export function getBookingErrorMessage(err: unknown): { title: string; descripti
   if (/after 10:30/i.test(text)) {
     return { title: "Invalid End Time", description: "Bookings cannot end after 10:30 PM." };
   }
+  if (/start and end on the same day/i.test(text)) {
+    return { title: "Invalid Booking Time", description: "Bookings must start and end on the same day." };
+  }
+  if (/cannot exceed one day/i.test(text)) {
+    return { title: "Invalid Booking Time", description: "Bookings cannot be longer than 15 hours." };
+  }
 
   return { title: "Error", description: err.message || "Failed to save booking" };
 }

@@ -87,6 +87,7 @@ export interface RoomTimetableTemplate {
   id: string;
   room_id: string;
   teacher_name: string;
+  teacher_profile_id: string | null;
   title: string;
   weekday: number; // 0=Monday..6=Sunday
   start_time: string;

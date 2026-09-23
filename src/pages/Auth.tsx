@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Calendar } from "lucide-react";
-import { apiClient, BASE_URL } from "@/lib/apiClient";
+import { apiClient, ApiError, BASE_URL } from "@/lib/apiClient";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -77,10 +77,13 @@ export default function Auth() {
     try {
       await apiClient.post("/user/forgot-password", { email });
       setForgotSuccess(true);
-    } catch {
+    } catch (err) {
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again.",
+        description:
+          err instanceof ApiError && err.status === 429
+            ? "Too many requests. Please try again later."
+            : "Something went wrong. Please try again.",
         variant: "destructive",
       });
     }
@@ -161,7 +164,7 @@ export default function Auth() {
     e.preventDefault();
     setVerifyLoading(true);
 
-    const { error } = await verifyEmail(verifyEmailAddress, verifyCode);
+    const { error } = await verifyEmail(verifyEmailAddress, verifyCode, password);
 
     if (error) {
       toast({
@@ -349,6 +352,7 @@ export default function Auth() {
                       placeholder="John"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
+                      maxLength={100}
                       required
                     />
                   </div>
@@ -361,6 +365,7 @@ export default function Auth() {
                       placeholder="Doe"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
+                      maxLength={100}
                       required
                     />
                   </div>
