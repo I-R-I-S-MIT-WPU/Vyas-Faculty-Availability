@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { InstallButton } from "@/components/pwa/InstallButton";
 
 interface HeaderProps {
   onVyasClick?: () => void;
@@ -52,6 +53,7 @@ export default function Header({ onVyasClick }: HeaderProps) {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">
+          <InstallButton />
           <ThemeToggle />
 
           {!loading && (
@@ -114,6 +116,7 @@ export default function Header({ onVyasClick }: HeaderProps) {
 
         {/* Mobile Menu Button */}
         <div className="md:hidden flex items-center space-x-2">
+          <InstallButton />
           <ThemeToggle />
           {user ? (
             <Button

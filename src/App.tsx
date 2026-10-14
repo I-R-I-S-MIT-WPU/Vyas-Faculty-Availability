@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeEffect } from "@/components/theme/ThemeEffect";
 import { AuthProvider } from "@/hooks/useAuth";
+import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
@@ -25,6 +26,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <OfflineBanner />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
