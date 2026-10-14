@@ -15,6 +15,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   domain_not_allowed: "Sign-in is restricted to @mitwpu.edu.in Google accounts.",
+  not_allowed: "This email is not on the authorized staff list. Contact the administrator.",
   unverified_account_exists:
     "An account with this email already exists but hasn't verified its email yet. Please complete or reset that registration first.",
   oauth_failed: "Google sign-in failed. Please try again.",
