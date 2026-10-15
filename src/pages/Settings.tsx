@@ -35,13 +35,24 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from "date-fns";
+
+interface DeviceSession {
+  id: string;
+  created_at: string;
+  last_seen_at: string;
+  user_agent: string | null;
+  current: boolean;
+}
+
+// "Chrome on Windows" from a user-agent string — enough to recognise a device.
+function describeDevice(ua: string | null): string {
+  if (!ua) return "Unknown device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+  const os = /iPhone|iPad|iPod/.test(ua) ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
 
 const Settings = () => {
   const { user, signOutEverywhere } = useAuth();
@@ -56,17 +67,38 @@ const Settings = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [bookingReminders, setBookingReminders] = useState(true);
 
-  // Change password dialog
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [logoutAllLoading, setLogoutAllLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
+  const [devices, setDevices] = useState<DeviceSession[]>([]);
 
   useEffect(() => {
     if (user) {
       fetchUserProfile();
+      fetchDevices();
     }
   }, [user]);
+
+  const fetchDevices = async () => {
+    try {
+      const { sessions } = await apiClient.get<{ success: boolean; sessions: DeviceSession[] }>("/user/sessions");
+      setDevices(sessions);
+    } catch (error) {
+      console.error("Error fetching devices:", error);
+    }
+  };
+
+  const handleRevokeDevice = async (id: string) => {
+    try {
+      await apiClient.del(`/user/sessions/${id}`);
+      setDevices((prev) => prev.filter((d) => d.id !== id));
+      toast({ title: "Signed out", description: "That device has been signed out." });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof ApiError ? error.message : "Could not sign out that device",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchUserProfile = async () => {
     try {
@@ -131,39 +163,6 @@ const Settings = () => {
     window.location.href = "/auth";
   };
 
-  const handleChangePassword = async () => {
-    setResetLoading(true);
-    try {
-      await apiClient.post("/user/forgot-password", { email: user!.email });
-      setResetSent(true);
-    } catch (err) {
-      toast({
-        title: "Error",
-        description:
-          err instanceof ApiError && err.status === 429
-            ? "Too many requests. Please try again later."
-            : "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-    }
-    setResetLoading(false);
-  };
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="container mx-auto py-6">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
-            <p className="text-muted-foreground">
-              Please sign in to access settings.
-            </p>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -380,13 +379,31 @@ const Settings = () => {
 
               <Separator />
 
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => { setResetSent(false); setPasswordDialogOpen(true); }}
-              >
-                Change Password
-              </Button>
+              <div className="space-y-3">
+                <Label>Your devices</Label>
+                <p className="text-sm text-muted-foreground">
+                  You sign in with a code emailed to you — there is no password. These are the
+                  devices currently signed in to your account.
+                </p>
+                {devices.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 rounded-md border p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {describeDevice(d.user_agent)}
+                        {d.current && <Badge variant="secondary" className="ml-2">This device</Badge>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Active {formatDistanceToNow(new Date(d.last_seen_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                    {!d.current && (
+                      <Button variant="outline" size="sm" onClick={() => handleRevokeDevice(d.id)}>
+                        Sign out
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
 
               <Separator />
 
@@ -405,41 +422,6 @@ const Settings = () => {
                 </p>
               </div>
 
-              <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Change Password</DialogTitle>
-                    <DialogDescription>
-                      We'll send a password reset link to your email address.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="reset-email">Email</Label>
-                      <Input
-                        id="reset-email"
-                        type="email"
-                        value={user.email || ""}
-                        disabled
-                        className="bg-muted"
-                      />
-                    </div>
-                    {resetSent ? (
-                      <p className="text-sm text-green-600">
-                        Check your email for the reset link.
-                      </p>
-                    ) : (
-                      <Button
-                        className="w-full"
-                        onClick={handleChangePassword}
-                        disabled={resetLoading}
-                      >
-                        {resetLoading ? "Sending..." : "Send Reset Link"}
-                      </Button>
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
             </CardContent>
           </Card>
 
