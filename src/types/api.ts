@@ -135,17 +135,6 @@ export interface EffectiveTimetableSlot {
 // Auth
 // ============================================================
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  full_name: string;
-  email: string;
-  password: string;
-}
-
 export interface AuthUser {
   id: string;
   full_name: string;
@@ -156,12 +145,6 @@ export interface AuthUser {
 export interface AuthResponse {
   message: string;
   user: AuthUser;
-  token: string;
-}
-
-export interface RegisterResponse {
-  requiresVerification: true;
-  email: string;
 }
 
 // ============================================================

@@ -1,12 +1,11 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import {
   getCurrentUser,
-  signIn as signInRequest,
-  signUp as signUpRequest,
+  refreshSession,
+  requestCode as requestCodeRequest,
+  verifyCode as verifyCodeRequest,
   signOut as signOutRequest,
   signOutEverywhere as signOutEverywhereRequest,
-  verifyEmail as verifyEmailRequest,
-  resendVerification as resendVerificationRequest,
   completeOAuthLogin as completeOAuthLoginRequest,
   StoredUser,
 } from "@/lib/auth";
@@ -22,14 +21,8 @@ interface AuthContextType {
   user: AuthUser | null;
   isAdmin: boolean;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: ApiError | null }>;
-  signUp: (
-    email: string,
-    password: string,
-    fullName: string
-  ) => Promise<{ error: ApiError | null; requiresVerification: boolean; email: string }>;
-  verifyEmail: (email: string, code: string, password: string) => Promise<{ error: ApiError | null }>;
-  resendVerification: (email: string) => Promise<{ error: ApiError | null }>;
+  requestCode: (email: string) => Promise<{ error: ApiError | null }>;
+  verifyCode: (email: string, code: string, remember: boolean) => Promise<{ error: ApiError | null }>;
   completeOAuthLogin: () => Promise<{ error: ApiError | null }>;
   signOut: () => Promise<void>;
   signOutEverywhere: () => Promise<{ error: ApiError | null }>;
@@ -39,10 +32,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
   loading: true,
-  signIn: async () => ({ error: null }),
-  signUp: async () => ({ error: null, requiresVerification: false, email: "" }),
-  verifyEmail: async () => ({ error: null }),
-  resendVerification: async () => ({ error: null }),
+  requestCode: async () => ({ error: null }),
+  verifyCode: async () => ({ error: null }),
   completeOAuthLogin: async () => ({ error: null }),
   signOut: async () => {},
   signOutEverywhere: async () => ({ error: null }),
@@ -66,31 +57,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setStored(getCurrentUser());
-    setLoading(false);
+    // Show the cached user at once, but don't trust it: confirm with the server
+    // so an expired/revoked session is noticed now, not on the next failed request.
+    const cached = getCurrentUser();
+    setStored(cached);
+    if (!cached) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    refreshSession().then((fresh) => {
+      if (cancelled) return;
+      setStored(fresh);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await signInRequest(email, password);
+  const verifyCode = async (email: string, code: string, remember: boolean) => {
+    const { error } = await verifyCodeRequest(email, code, remember);
     if (!error) setStored(getCurrentUser());
     return { error };
-  };
-
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { error, requiresVerification, email: verifiedEmail } = await signUpRequest(email, password, fullName);
-    // No session is created here — requiresVerification is always true on
-    // success, so there's nothing to refresh from localStorage yet.
-    return { error, requiresVerification, email: verifiedEmail };
-  };
-
-  const verifyEmail = async (email: string, code: string, password: string) => {
-    const { error } = await verifyEmailRequest(email, code, password);
-    if (!error) setStored(getCurrentUser());
-    return { error };
-  };
-
-  const resendVerification = async (email: string) => {
-    return resendVerificationRequest(email);
   };
 
   const completeOAuthLogin = async () => {
@@ -116,10 +105,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user: toAuthUser(stored),
         isAdmin: stored?.is_admin ?? false,
         loading,
-        signIn,
-        signUp,
-        verifyEmail,
-        resendVerification,
+        requestCode: requestCodeRequest,
+        verifyCode,
         completeOAuthLogin,
         signOut,
         signOutEverywhere,

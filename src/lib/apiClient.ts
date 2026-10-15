@@ -13,16 +13,32 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+type RequestOpts = RequestInit & {
+  // For the "is my session still valid?" check: a 401 there just means "signed out",
+  // not "bounce the user to /auth".
+  quiet401?: boolean;
+};
+
+// Destructive/admin routes answer 403 REAUTH_REQUIRED until the user confirms a
+// fresh emailed code. The app registers a handler (components/auth/ReauthHost)
+// that asks for it; if they complete it the original request is retried once.
+type ReauthHandler = () => Promise<boolean>;
+let reauthHandler: ReauthHandler | null = null;
+export const setReauthHandler = (handler: ReauthHandler | null) => {
+  reauthHandler = handler;
+};
+
+async function request<T>(path: string, options?: RequestOpts, retried = false): Promise<T> {
+  const { quiet401, ...init } = options ?? {};
   const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    credentials: "include", // sends the httpOnly JWT cookie automatically
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    ...init,
+    credentials: "include", // sends the httpOnly session cookie automatically
+    headers: { "Content-Type": "application/json", ...init.headers },
   });
 
   if (res.status === 401) {
     localStorage.removeItem("vyaas_user");
-    if (!window.location.pathname.startsWith("/auth")) {
+    if (!quiet401 && !window.location.pathname.startsWith("/auth")) {
       window.location.href = "/auth";
     }
     throw new ApiError("Unauthorized", 401);
@@ -30,6 +46,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 403 && body.code === "REAUTH_REQUIRED" && reauthHandler && !retried) {
+      if (await reauthHandler()) return request<T>(path, options, true);
+    }
     throw new ApiError(body.message ?? body.error ?? "Request failed", res.status, body.details, body.code);
   }
 
@@ -38,7 +57,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, opts?: RequestOpts) => request<T>(path, opts),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
