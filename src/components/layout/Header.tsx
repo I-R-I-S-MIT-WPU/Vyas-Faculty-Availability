@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
+  CalendarRange,
   LogIn,
   LogOut,
   User,
@@ -16,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { InstallButton } from "@/components/pwa/InstallButton";
+import { plannerEnabled } from "@/features/planner/lib/flag";
 
 interface HeaderProps {
   onVyasClick?: () => void;
@@ -78,6 +80,15 @@ export default function Header({ onVyasClick }: HeaderProps) {
                         Admin
                       </Button>
                     </Link>
+                  )}
+
+                  {isAdmin && plannerEnabled() && (
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/admin/planner">
+                        <CalendarRange className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Timetable Planner
+                      </Link>
+                    </Button>
                   )}
 
                   <Link to="/settings">

@@ -15,6 +15,11 @@ import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Settings from "./pages/Settings";
+import { plannerEnabled } from "@/features/planner/lib/flag";
+import PlannerTermsPage from "@/features/planner/pages/PlannerTermsPage";
+import PlannerTermSetupPage from "@/features/planner/pages/PlannerTermSetupPage";
+import PlannerImportPage from "@/features/planner/pages/PlannerImportPage";
+import PlannerEditorPage from "@/features/planner/pages/PlannerEditorPage";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +41,14 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/settings" element={<Settings />} />
+              {plannerEnabled() && (
+                <>
+                  <Route path="/admin/planner" element={<PlannerTermsPage />} />
+                  <Route path="/admin/planner/terms/:termId" element={<PlannerTermSetupPage />} />
+                  <Route path="/admin/planner/terms/:termId/import" element={<PlannerImportPage />} />
+                  <Route path="/admin/planner/terms/:termId/editor" element={<PlannerEditorPage />} />
+                </>
+              )}
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

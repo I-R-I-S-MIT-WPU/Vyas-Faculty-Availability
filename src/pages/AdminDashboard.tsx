@@ -62,6 +62,9 @@ import { FloorManagementDialog } from "@/components/admin/FloorManagementDialog"
 import BuildingManagementDialog from "@/components/admin/BuildingManagementDialog";
 import { ReportGenerator } from "@/components/admin/ReportGenerator";
 import { TimetableImportPanel } from "@/components/admin/TimetableImportPanel";
+import { Link } from "react-router-dom";
+import { CalendarRange } from "lucide-react";
+import { plannerEnabled } from "@/features/planner/lib/flag";
 
 const AdminDashboard = () => {
   const { user, isAdmin } = useAuth();
@@ -433,6 +436,14 @@ const AdminDashboard = () => {
           <p className="text-muted-foreground mt-2 text-sm sm:text-base">
             Manage users, bookings, and system settings
           </p>
+          {plannerEnabled() && (
+            <Button asChild variant="outline" size="sm" className="mt-4">
+              <Link to="/admin/planner">
+                <CalendarRange className="mr-2 h-4 w-4" aria-hidden="true" />
+                Timetable Planner
+              </Link>
+            </Button>
+          )}
         </div>
 
         <Tabs
